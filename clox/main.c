@@ -56,7 +56,7 @@ static char* readFile(const char* filepath) {
         fprintf(stderr, "Error while reading file \"%s\"\n", filepath);
         exit(74);
     }
-    buffer[bytesRead] = 0;
+    buffer[bytesRead] = '\0';
 
     fclose(file);
     return buffer;

@@ -34,11 +34,14 @@ static Token identifier();
 #define PEEK() PEEKN(1)
 Token scanToken() {
     lexer.start = lexer.current;
-    if (isAtEnd()) {
-        return makeToken(TOKEN_EOF);
-    }
     skipWhitespace();
     char c = ADVANCE();
+    if (c == '\0') {
+        // printf("Lexer reached end of input\n");
+        lexer.current--;
+        return makeToken(TOKEN_EOF);
+    }
+    // printf("Next character to lex: 0x%x\n", c);
     if (isDigit(c)) {
         return number();
     }
@@ -120,8 +123,8 @@ static Token number() {
     return makeToken(TOKEN_NUMBER);
 }
 
-static TokenType checkKeyword(int start, int end, const char* tail, TokenType type) {
-    if (lexer.current - lexer.start == start + length && memcmp(lexer.start + start, tail. length)) {
+static TokenType checkKeyword(int start, int length, const char* tail, TokenType type) {
+    if (lexer.current - lexer.start == start + length && memcmp(lexer.start + start, tail, length)) {
         return type;
     } else {
         return TOKEN_IDENTIFIER;
@@ -135,8 +138,8 @@ static TokenType identifierType() {
         case 'c': return checkKeyword(1, 4, "lass", TOKEN_CLASS);
         case 'e': return checkKeyword(1, 3, "lse", TOKEN_ELSE);
         case 'f':
-            if (scanner.current - scanner.start > 1) {
-                switch (scanner.start[1]) {
+            if (lexer.current - lexer.start > 1) {
+                switch (lexer.start[1]) {
                     case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
                     case 'o': return checkKeyword(2, 1, "r", TOKEN_FOR);
                     case 'u': return checkKeyword(2, 1, "n", TOKEN_FUN);
@@ -150,8 +153,8 @@ static TokenType identifierType() {
         case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
         case 's': return checkKeyword(1, 4, "uper", TOKEN_SUPER);
         case 't':
-            if (scanner.current - scanner.start > 1) {
-                switch (scanner.start[1]) {
+            if (lexer.current - lexer.start > 1) {
+                switch (lexer.start[1]) {
                     case 'h': return checkKeyword(2, 2, "is", TOKEN_THIS);
                     case 'r': return checkKeyword(2, 2, "ue", TOKEN_TRUE);
                 }
@@ -197,7 +200,7 @@ static bool match(char c) {
 }
 
 static bool isAtEnd() {
-    return *lexer.current == 0;
+    return *lexer.current == '\0';
 }
 
 static Token makeToken(TokenType type) {

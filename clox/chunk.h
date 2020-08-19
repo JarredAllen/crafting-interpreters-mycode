@@ -28,7 +28,7 @@ void initChunk(Chunk* chunk);
 void writeChunk(Chunk* chunk, uint8_t byte, uint line);
 void freeChunk(Chunk* chunk);
 // Create a new constant and return its index in the vector
-int addConstant(Chunk* chunk, Value value);
+uint64_t addConstant(Chunk* chunk, Value value);
 // Create a new constant and write the appropriate retrieval in the code
 void writeConstant(Chunk* chunk, Value value, int line);
 

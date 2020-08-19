@@ -31,7 +31,7 @@ void freeChunk(Chunk* chunk) {
     initChunk(chunk);
 }
 
-int addConstant(Chunk*chunk, Value value) {
+uint64_t addConstant(Chunk*chunk, Value value) {
     writeValueArray(&chunk->constants, value);
     return chunk->constants.length - 1;
 }
@@ -47,5 +47,6 @@ void writeConstant(Chunk* chunk, Value value, int line) {
         writeChunk(chunk, (index >> 8) & 0xFF, line);
     } else {
         printf("Out of space for storing constants");
+        exit(65);
     }
 }

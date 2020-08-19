@@ -32,16 +32,16 @@ InterpretResult interpret(const char* source) {
     Chunk chunk;
     initChunk(&chunk);
     if (!compile(source, &chunk)) {
+        freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
     vm.chunk = &chunk;
     vm.ip = vm.chunk->code;
+    InterpretResult result = run();
     freeChunk(vm.chunk);
     vm.chunk = NULL;
-    return run();
+    return result;
 }
-
-#define DEBUG_TRACE_EXECUTION
 
 // Define some aliases for common functions used in the run function
 #define READ_BYTE() (*vm.ip++)
