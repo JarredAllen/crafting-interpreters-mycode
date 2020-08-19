@@ -81,15 +81,12 @@ where
                     True => LoxObject::Boolean(true),
                     False => LoxObject::Boolean(false),
                     Nil => LoxObject::Nil,
-                    Identifier(id) => self.environment.get(id).map_or_else(
-                        || {
-                            Err((
-                                LoxExprError::UndefinedIdentifier(id.clone()),
-                                expr.location.clone(),
-                            ))
-                        },
-                        |val| Ok(val.clone()),
-                    )?,
+                    Identifier(id) => self.environment.get(id).ok_or_else(
+                        || (
+                            LoxExprError::UndefinedIdentifier(id.clone()),
+                            expr.location.clone(),
+                        ),
+                    )?.clone(),
                 }
             }
             AstExprKind::UnOp { op, arg } => {
@@ -218,11 +215,12 @@ where
                         callee.location.clone(),
                     ));
                 }
-                let arg_values = args
+                let _arg_values = args
                     .iter()
                     .map(|arg_expr| self.evaluate_expr(arg_expr))
                     .collect::<Result<Vec<_>, _>>()?;
-                func.method_call(self, &mut object, &arg_values)?
+                unimplemented!()
+                // func.method_call(self, &mut object, &arg_values)?
             }
             AstExprKind::Call { callee, args } => {
                 let object = self.evaluate_expr(callee)?;
@@ -917,17 +915,17 @@ impl LoxCallable for LoxMethod {
 
     fn call(
         &self,
-        interpreter: &mut dyn Interpreter,
-        args: &[LoxObject],
+        _interpreter: &mut dyn Interpreter,
+        _args: &[LoxObject],
     ) -> Result<LoxObject, (LoxExprError, CodeLocation)> {
         unimplemented!("class methods")
     }
 
     fn method_call(
         &self,
-        interpreter: &mut dyn Interpreter,
-        callee: &mut LoxObject,
-        args: &[LoxObject],
+        _interpreter: &mut dyn Interpreter,
+        _callee: &mut LoxObject,
+        _args: &[LoxObject],
     ) -> Result<LoxObject, (LoxExprError, CodeLocation)> {
         unimplemented!("class methods")
     }
@@ -987,6 +985,8 @@ pub enum LoxExprError {
     #[error("{0}")]
     /// Catch-all for kinds of errors not in here
     RuntimeError(String),
+    #[error("Assertion failed: {0}")]
+    AssertionFailed(String),
 }
 
 #[derive(Debug, Clone, Error)]

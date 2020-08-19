@@ -234,11 +234,17 @@ impl NativeParser {
                             kind: TokenKind::RightParen,
                             ..
                         }) => (),
-                        Some(_token) => {
-                            panic!("Missing close paren");
+                        Some(token) => {
+                            return AstStmt { location: token.location.clone(), kind: AstStmtKind::ErrorStmt(AstError {
+                                kind: AstErrorKind::MissingCloseParen,
+                                location: token.location.clone(),
+                            }), };
                         }
                         None => {
-                            panic!("Missing close paren");
+                            return AstStmt { location: CodeLocation::EndOfFile, kind: AstStmtKind::ErrorStmt(AstError {
+                                kind: AstErrorKind::MissingCloseParen,
+                                location: CodeLocation::EndOfFile,
+                            }), };
                         }
                     }
                 }
@@ -352,7 +358,7 @@ impl NativeParser {
                 let mut class_functions = Vec::new();
                 while tokens.peek().map(|t| &t.kind) == Some(&TokenKind::Fun) {
                     match NativeParser::parse_function(tokens) {
-                        FuncKind::Named(name, mut args, block) => {
+                        FuncKind::Named(name, args, block) => {
                             class_functions.push((name, args, block));
                         }
                         FuncKind::Unnamed(_, block) => {

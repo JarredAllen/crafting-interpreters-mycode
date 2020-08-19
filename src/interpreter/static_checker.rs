@@ -13,7 +13,7 @@ struct ReturnOutsideFunctionChecker {
 }
 impl<'ast> Visitor<'ast> for ReturnOutsideFunctionChecker {
     fn visit_stmt(&mut self, stmt: &'ast AstStmt) {
-        if let AstStmtKind::FnDefnStmt(..) = stmt.kind {
+        if let AstStmtKind::FnDefnStmt(..) | AstStmtKind::ClassDefnStmt(..) = stmt.kind {
         } else {
             if let AstStmtKind::ReturnStmt(_) = stmt.kind {
                 self.errors.push(stmt.location.clone());

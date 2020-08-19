@@ -4,6 +4,14 @@ use std::collections::HashMap;
 
 type FuncReturn = Result<LoxObject, (LoxExprError, CodeLocation)>;
 
+fn assert(_: &mut dyn Interpreter, args: &[LoxObject]) -> FuncReturn {
+    if args[0].is_truthy() {
+        Ok(LoxObject::Nil)
+    } else {
+        Err((LoxExprError::AssertionFailed(args[1].to_string()), CodeLocation::NoInfo))
+    }
+}
+
 fn eprint(_: &mut dyn Interpreter, args: &[LoxObject]) -> FuncReturn {
     eprintln!("{}", args[0]);
     Ok(LoxObject::Nil)
@@ -40,6 +48,14 @@ fn object_constructor(_: &mut dyn Interpreter, _: &[LoxObject]) -> FuncReturn {
 
 pub fn get_std_items() -> std::collections::HashMap<String, LoxObject> {
     let mut data = std::collections::HashMap::new();
+    data.insert(
+        "assert".to_string(),
+        LoxObject::Native(NativeFunction {
+            func: &assert,
+            arity: 2,
+            debug: "assert",
+        }),
+    );
     data.insert(
         "eprint".to_string(),
         LoxObject::Native(NativeFunction {

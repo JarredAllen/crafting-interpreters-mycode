@@ -155,3 +155,30 @@ impl Display for CodeLocation {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_code_location() {
+        // Test get_line_num
+        assert_eq!(CodeLocation::NoInfo.get_line_num(), None);
+        assert_eq!(CodeLocation::EndOfFile.get_line_num(), None);
+        assert_eq!(CodeLocation::LineNum { line_num: 5 }.get_line_num(), Some(5));
+        assert_eq!(CodeLocation::LineNumAndPosition { line_num: 5, col: 3 }.get_line_num(), Some(5));
+        // Test add_line
+        assert_eq!(CodeLocation::Line { line: "object.method()".to_string() }, CodeLocation::NoInfo.add_line("object.method()".to_string()));
+        assert_eq!(CodeLocation::Line { line: "object.method()".to_string() }, CodeLocation::EndOfFile.add_line("object.method()".to_string()));
+        assert_eq!(CodeLocation::LineNumAndLine { line: "object.method()".to_string(), line_num: 5}, CodeLocation::LineNum { line_num: 5 }.add_line("object.method()".to_string()));
+        assert_eq!(CodeLocation::LineNumLineAndPosition { line: "object.method()".to_string(), line_num: 5, col: 3 }, CodeLocation::LineNumAndPosition { line_num: 5, col: 3 }.add_line("object.method()".to_string()));
+        // Test add_line_from_slice
+        let code = ["var object = object();", "object.method();", "print(\"We did it, reddit\");"].iter().cloned().map(String::from).collect::<Vec<String>>();
+        assert_eq!(CodeLocation::NoInfo, CodeLocation::NoInfo.add_line_from_slice(&code));
+        assert_eq!(CodeLocation::LineNumAndLine { line_num: 1, line: "var object = object();".to_string() }, CodeLocation::LineNum { line_num: 1 }.add_line_from_slice(&code));
+        // Test display impls
+        assert_eq!("No location info".to_string(), format!("{}", CodeLocation::NoInfo));
+        assert_eq!("End of file".to_string(), format!("{}", CodeLocation::EndOfFile));
+        assert_eq!("? | print(42);".to_string(), format!("{}", CodeLocation::Line { line: "print(42);".to_string() }));
+    }
+}

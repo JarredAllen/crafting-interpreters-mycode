@@ -1,0 +1,16 @@
+fun factorial(x) {
+    var product = 1;
+    for var i = 1; i = i+1; i <= x {
+        product = product * i;
+    }
+    return product;
+}
+
+assert(factorial(0) == 1, "failed on factorial(0)");
+assert(factorial(1) == 1, "failed on factorial(1)");
+assert(factorial(2) == 2, "failed on factorial(2)");
+assert(factorial(3) == 6, "failed on factorial(3)");
+assert(factorial(4) == 24, "failed on factorial(4)");
+assert(factorial(5) == 120, "failed on factorial(5)");
+assert(factorial(6) == 720, "failed on factorial(6)");
+assert(factorial(7) == 5040, "failed on factorial(7)");
