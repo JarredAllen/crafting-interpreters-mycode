@@ -1,9 +1,12 @@
-CC = clang
-CC_FLAGS = -Wall -Wextra -Wpedantic
+CC=clang
+CC_FLAGS=-Wall -Wextra -Wpedantic -g -Og
 
-main: main.o
-	$(CC) -o clox main.c
+HEADERS=common.h chunk.h compiler.h debug.h lexer.h memory.h value.h vm.h
+OBJ=chunk.o compiler.o debug.o lexer.o main.o value.o vm.o
 
-main.o: main.c common.h
-	$(CC) $(CC_FLAGS) -c main.c
+main: $(OBJ)
+	$(CC) -o clox $(OBJ)
+
+%.o: %.c $(HEADERS)
+	$(CC) $(CC_FLAGS) -c -o $@ $<
 
