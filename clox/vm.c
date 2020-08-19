@@ -2,10 +2,12 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 #include "vm.h"
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 VM vm;
 
@@ -15,9 +17,11 @@ static void resetStack() {
 
 void initVM() {
     resetStack();
+    vm.objects = NULL;
 }
 
 void freeVM() {
+    freeObjects();
 }
 
 static void stackPush(Value value) {
@@ -124,7 +128,27 @@ static InterpretResult run() {
                 stackPush(BOOL_VAL(!truthy(stackPop())));
                 break;
             }
-            case OP_ADD: BINARY_OP(NUMBER_VAL, +); break;
+            case OP_ADD: {
+                if (IS_STRING(stackPeek(0)) && IS_STRING(stackPeek(1))) {
+                    ObjString* b = AS_STRING(stackPop());
+                    ObjString* a = AS_STRING(stackPop());
+                    int length = a->length + b->length;
+                    char* chars = ALLOCATE(char, length+1);
+                    memcpy(chars, a->chars, a->length);
+                    memcpy(chars+a->length, b->chars, b->length);
+                    chars[length] = '\0';
+                    ObjString* result = takeString(chars, length);
+                    stackPush(OBJ_VAL(result));
+                } else if (IS_NUMBER(stackPeek(0))  && IS_NUMBER(stackPeek(1))) {
+                    Value b = stackPop();
+                    Value a = stackPop();
+                    stackPush(NUMBER_VAL(a.as.number + b.as.number));
+                } else {
+                    runtimeError("Addition operands must be either two strings or two numbers");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+             }
             case OP_SUB: BINARY_OP(NUMBER_VAL, -); break;
             case OP_MUL: BINARY_OP(NUMBER_VAL, *); break;
             case OP_DIV: BINARY_OP(NUMBER_VAL, /); break;
