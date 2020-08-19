@@ -1,3 +1,4 @@
+#include "common.h"
 #include "value.h"
 #include <stdio.h>
 
@@ -24,5 +25,28 @@ void freeValueArray(ValueArray* values) {
 }
 
 void printValue(Value value) {
-    printf("%g", value);
+    switch (value.type) {
+        case VAL_NUMBER: printf("%g", value.as.number); break;
+        case VAL_BOOL: printf(value.as.boolean ? "true" : "false"); break;
+        case VAL_NIL: printf("nil");
+    }
+}
+
+bool truthy(Value value) {
+    switch (value.type) {
+        case VAL_NIL: return false;
+        case VAL_BOOL: return value.as.boolean;
+        case VAL_NUMBER: return value.as.number != 0;
+    }
+}
+
+bool valuesEqual(Value a, Value b) {
+    if (a.type != b.type) {
+        return false;
+    }
+    switch (a.type) {
+        case VAL_NIL: return true;
+        case VAL_BOOL: return a.as.boolean == b.as.boolean;
+        case VAL_NUMBER: return a.as.number == b.as.number;
+    }
 }

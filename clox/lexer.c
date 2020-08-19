@@ -33,8 +33,8 @@ static Token identifier();
 #define PEEKN(n) (*lexer.current+n-1)
 #define PEEK() PEEKN(1)
 Token scanToken() {
-    lexer.start = lexer.current;
     skipWhitespace();
+    lexer.start = lexer.current;
     char c = ADVANCE();
     if (c == '\0') {
         // printf("Lexer reached end of input\n");
@@ -124,7 +124,7 @@ static Token number() {
 }
 
 static TokenType checkKeyword(int start, int length, const char* tail, TokenType type) {
-    if (lexer.current - lexer.start == start + length && memcmp(lexer.start + start, tail, length)) {
+    if (lexer.current - lexer.start == start + length && memcmp(lexer.start + start, tail, length) == 0) {
         return type;
     } else {
         return TOKEN_IDENTIFIER;
@@ -132,6 +132,7 @@ static TokenType checkKeyword(int start, int length, const char* tail, TokenType
 }
 
 static TokenType identifierType() {
+    // fprintf(stderr, "Making a token from \"%*s\"\n", (int)(lexer.current - lexer.start), lexer.start);
     switch (*lexer.start) {
         // Single keyword letters
         case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
