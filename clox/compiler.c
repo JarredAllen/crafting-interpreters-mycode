@@ -5,10 +5,25 @@
 #include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
+
+typedef struct {
+    Token name;
+    int depth;
+} Local;
+
+#define MAX_LOCALS 65536
+
+typedef struct {
+    Local locals[MAX_LOCALS];
+    int localCount;
+    int scopeDepth;
+} Compiler;
+Compiler* currentCompiler = NULL;
 
 typedef struct {
     Token current;
@@ -25,6 +40,7 @@ static void consume();
 static void declaration();
 static void endCompiler();
 static void expression();
+static void initCompiler(Compiler* compiler);
 static void initParser();
 static bool match(TokenType);
 static void statement();
@@ -32,6 +48,8 @@ static void statement();
 bool compile(const char* source, Chunk* chunk) {
     initLexer(source);
     initParser();
+    Compiler compiler;
+    initCompiler(&compiler);
     targetChunk = chunk;
     advance();
     while (!match(TOKEN_EOF)) {
@@ -122,6 +140,36 @@ static void synchronize() {
     }
 }
 
+static bool identifiersEqual(Token* a, Token* b) {
+    if (a->length != b->length) {
+        return false;
+    }
+    return memcmp(a->start, b->start, a->length) == 0;
+}
+static void addLocal(Token name) {
+    if (currentCompiler->localCount >= MAX_LOCALS) {
+        error("Too many local variables in function.");
+        return;
+    }
+    for (int i=currentCompiler->localCount-1; i >= 0; i--) {
+        Local* local = currentCompiler->locals+i;
+        if (local->depth != -1 && local->depth < currentCompiler->scopeDepth) {
+            break;
+        }
+        if (identifiersEqual(&name, &local->name)) {
+            error("Variable with this name already declared in this scope.");
+        }
+    }
+    Local* local = &currentCompiler->locals[currentCompiler->localCount++];
+    local->name = name;
+    local->depth = -1;
+}
+static void declareVariable() {
+    if (currentCompiler->scopeDepth == 0) {
+        return;
+    }
+    addLocal(parser.previous);
+}
 static uint64_t identifierConstant(Token* name) {
     return addConstant(targetChunk, OBJ_VAL(copyString(name->start, name->length)));
 }
@@ -129,12 +177,25 @@ static uint64_t identifierConstant(Token* name) {
 // and point to its location in the constants table
 static uint64_t parseVariable(const char* errorMessage) {
     consume(TOKEN_IDENTIFIER, errorMessage);
+
+    declareVariable();
+    if (currentCompiler->scopeDepth > 0) {
+        return 0;
+    }
     return identifierConstant(&parser.previous);
 }
+static void markInitialized() {
+    currentCompiler->locals[currentCompiler->localCount-1].depth = currentCompiler->scopeDepth;
+}
 // Make an instruction to define the variable whose name is at the given
-// index of the constants table.
+// index of the constants table (if we're not in a scope) or into the
+// stack (if we're in a scope).
 // Will error if the index is too large
 static void defineVariable(uint64_t index) {
+    if (currentCompiler->scopeDepth > 0) {
+        markInitialized();
+        return;
+    }
     if (index <= 0xFF) {
         emitByte(OP_DEFINE_GLOBAL);
         emitByte((uint8_t)index);
@@ -181,9 +242,30 @@ static void expressionStatement() {
     emitByte(OP_POP);
 }
 
+static void beginScope() {
+    currentCompiler->scopeDepth++;
+}
+static void block() {
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        declaration();
+    }
+    consume(TOKEN_RIGHT_BRACE, "Expected '}' after block");
+}
+static void endScope() {
+    currentCompiler->scopeDepth--;
+    while (currentCompiler->localCount > 0 && currentCompiler->locals[currentCompiler->localCount-1].depth > currentCompiler->scopeDepth) {
+        emitByte(OP_POP);
+        currentCompiler->localCount--;
+    }
+}
+
 static void statement() {
     if (match(TOKEN_PRINT)) {
         printStatement();
+    } else if (match(TOKEN_LEFT_BRACE)) {
+        beginScope();
+        block();
+        endScope();
     } else {
         expressionStatement();
     }
@@ -221,25 +303,53 @@ static void number(__attribute__((unused)) bool canAssign) {
 static void string(__attribute__((unused)) bool canAssign) {
     emitConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length-2)));
 }
+static int64_t resolveLocal(Compiler* compiler, Token* name) {
+    for (int i=compiler->localCount-1; i >= 0; i--) {
+        if (compiler->locals[i].depth != -1 && identifiersEqual(name, &compiler->locals[i].name)) {
+            return i;
+        }
+    }
+    return -1;
+}
 static void namedVariable(Token name, bool canAssign) {
-    uint64_t index = identifierConstant(&name);
+    uint8_t getOp, setOp;
+    int arg = resolveLocal(currentCompiler, &name);
+    uint64_t index;
+    if (arg != -1) {
+        index = (uint64_t)arg;
+        if (index <= 0xFF) {
+            getOp = OP_GET_LOCAL;
+            setOp = OP_SET_LOCAL;
+        } else if (index <= 0xFFFF) {
+            getOp = OP_GET_LOCAL_LONG;
+            setOp = OP_SET_LOCAL_LONG;
+        } else {
+            fprintf(stderr, "Can have no more than 65536 local variables in scope at a time");
+            exit(-1);
+        }
+    } else {
+        index = identifierConstant(&name);
+        if (index <= 0xFF) {
+            getOp = OP_GET_GLOBAL;
+            setOp = OP_SET_GLOBAL;
+        } else if (index <= 0xFFFF) {
+            getOp = OP_GET_GLOBAL_LONG;
+            setOp = OP_SET_GLOBAL_LONG;
+        } else {
+            fprintf(stderr, "Global variable names must be in the first 65536 entries of the constants table");
+            exit(-1);
+        }
+    }
     bool assign = canAssign && match(TOKEN_EQUAL);
     if (assign) {
         expression();
+        emitByte(setOp);
+    } else {
+        emitByte(getOp);
     }
     if (index <= 0xFF) {
-        if (assign) {
-            emitByte(OP_SET_GLOBAL);
-        } else {
-            emitByte(OP_GET_GLOBAL);
-        }
         emitByte((uint8_t) index);
     } else if (index <= 0xFFFF) {
-        if (assign) {
-            emitByte(OP_SET_GLOBAL_LONG);
-        } else {
-            emitByte(OP_GET_GLOBAL_LONG);
-        }
         emitByte((uint8_t)(index & 0xFF));
         emitByte((uint8_t)((index >> 8) & 0xFF));
     } else {
@@ -368,4 +478,10 @@ static void endCompiler() {
 static void initParser() {
     parser.hadError = false;
     parser.panicMode = false;
+}
+
+static void initCompiler(Compiler* compiler) {
+    compiler->localCount = 0;
+    compiler->scopeDepth = 0;
+    currentCompiler = compiler;
 }

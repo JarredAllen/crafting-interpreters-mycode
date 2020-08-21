@@ -225,6 +225,26 @@ static InterpretResult run() {
                 }
                 break;
             }
+            case OP_GET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                stackPush(vm.stack[slot]);
+                break;
+            }
+            case OP_GET_LOCAL_LONG: {
+                uint16_t slot = (uint16_t)READ_BYTE() + ((uint16_t)READ_BYTE() << 8);
+                stackPush(vm.stack[slot]);
+                break;
+            }
+            case OP_SET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                vm.stack[slot] = stackPeek(0);
+                break;
+            }
+            case OP_SET_LOCAL_LONG: {
+                uint16_t slot = (uint16_t)READ_BYTE() + ((uint16_t)READ_BYTE() << 8);
+                vm.stack[slot] = stackPeek(0);
+                break;
+            }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }

@@ -17,12 +17,22 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     printf("'\n");
     return offset + 2;
 }
+static int localVariableInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t slot = chunk->code[offset+1];
+    printf("%-21s slot %d\n", name, slot);
+    return offset + 2;
+}
 static int longConstantInstruction(const char* name, Chunk* chunk, int offset) {
     uint16_t constant = (uint16_t)(chunk->code[offset+1]) + (uint16_t)(chunk->code[offset+2] << 8);
     printf("%-21s 0x%04x '", name, constant);
     printValue(chunk->constants.values[constant]);
     printf("'\n");
     return offset + 3;
+}
+static int longLocalVariableInstruction(const char* name, Chunk* chunk, int offset) {
+    uint16_t slot = (uint16_t)(chunk->code[offset+1]) + (uint16_t)(chunk->code[offset+2] << 8);
+    printf("%-21s slot %d\n", name, slot);
+    return offset + 2;
 }
 
 void disassembleChunk(Chunk* chunk, const char* name) {
@@ -91,6 +101,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return constantInstruction("OP_SET_GLOBAL", chunk, offset);
         case OP_SET_GLOBAL_LONG:
             return longConstantInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
+        case OP_GET_LOCAL:
+            return localVariableInstruction("OP_GET_LOCAL", chunk, offset);
+        case OP_GET_LOCAL_LONG:
+            return longLocalVariableInstruction("OP_GET_LOCAL_LONG", chunk, offset);
+        case OP_SET_LOCAL:
+            return localVariableInstruction("OP_SET_LOCAL", chunk, offset);
+        case OP_SET_LOCAL_LONG:
+            return longLocalVariableInstruction("OP_SET_LOCAL_LONG", chunk, offset);
         default:
             printf("Unknown opcode: 0x%x\n", instruction);
             return offset + 1;
