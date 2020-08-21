@@ -50,7 +50,7 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
         return false;
     }
     Entry* entry = findEntry(table->entries, table->capacity, key);
-    if (entry) {
+    if (entry->key) {
         *value = entry->value;
         return true;
     } else {

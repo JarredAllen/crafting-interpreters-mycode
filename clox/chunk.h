@@ -2,17 +2,19 @@
 #define clox_chunk_h
 
 #include "common.h"
+#include "lexer.h"
+#include "table.h"
 #include "value.h"
 
 typedef enum {
-    // Instructions for constants from the constant table
+    // Direct stack manipulation
     OP_CONSTANT,
     OP_CONSTANT_LONG,
-    // OP_CONSTANT_LONG_LONG, // Include this if 65,536 constants aren't enough for stuff
-    // Various values which have specfic codes
+    // OP_CONSTANT_LONG_LONG, // Include this if 65,536 constants aren't enough for code
     OP_NIL,
     OP_TRUE,
     OP_FALSE,
+    OP_POP,
     // Arithmetic
     OP_NEGATE,
     OP_ADD,
@@ -29,9 +31,19 @@ typedef enum {
     OP_NOT,
     // Control flow
     OP_RETURN,
+    // Input/outpuit
+    OP_PRINT,
+    // Variable manipulation
+    OP_DEFINE_GLOBAL,
+    OP_DEFINE_GLOBAL_LONG,
+    OP_GET_GLOBAL,
+    OP_GET_GLOBAL_LONG,
+    OP_SET_GLOBAL,
+    OP_SET_GLOBAL_LONG,
 } OpCode;
 
 typedef struct {
+    Table stringConstants;
     uint8_t* code;
     uint* lines;
     int length;
@@ -46,5 +58,7 @@ void freeChunk(Chunk* chunk);
 uint64_t addConstant(Chunk* chunk, Value value);
 // Create a new constant and write the appropriate retrieval in the code
 void writeConstant(Chunk* chunk, Value value, int line);
+void fetchConstant(Chunk* chunk, uint64_t index, int line);
+void findStringConstant(Chunk* chunk, Token* name);
 
 #endif

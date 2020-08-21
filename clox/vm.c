@@ -18,11 +18,13 @@ static void resetStack() {
 void initVM() {
     resetStack();
     initTable(&vm.strings);
+    initTable(&vm.globals);
     vm.objects = NULL;
 }
 
 void freeVM() {
     freeTable(&vm.strings);
+    freeTable(&vm.globals);
     freeObjects();
 }
 
@@ -83,6 +85,16 @@ static void runtimeError(const char* format, ...) {
 static InterpretResult run() {
     uint8_t instruction;
     for (;;) {
+#ifdef DEBUG_RUNTIME_CHECKS
+        if (vm.stackTop < vm.stack) {
+            fprintf(stderr, "Stack size somehow became negative.\n");
+            exit(-1);
+        }
+#endif
+        if (vm.ip >= vm.chunk->code + vm.chunk->length) {
+            // We've reached the end of the program, so return
+            return INTERPRET_OK;
+        }
 #ifdef DEBUG_TRACE_EXECUTION
         for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
             printf("[ ");
@@ -94,9 +106,8 @@ static InterpretResult run() {
 #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN: {
-                printValue(stackPop());
-                printf("\n");
-                return INTERPRET_OK;
+                fprintf(stderr, "Return not presently supported");
+                break;
             }
             case OP_CONSTANT: {
                 stackPush(READ_CONSTANT());
@@ -164,6 +175,56 @@ static InterpretResult run() {
             case OP_LE: BINARY_OP(BOOL_VAL, <=); break;
             case OP_GT: BINARY_OP(BOOL_VAL, >); break;
             case OP_GE: BINARY_OP(BOOL_VAL, >=); break;
+            case OP_PRINT: {
+                printValue(stackPop());
+                printf("\n");
+                break;
+            }
+            case OP_POP: stackPop(); break;
+            case OP_DEFINE_GLOBAL: {
+                ObjString* name = AS_STRING(READ_CONSTANT());
+                tableSet(&vm.globals, name, stackPeek(0));
+                stackPop();
+                break;
+            }
+            case OP_DEFINE_GLOBAL_LONG: {
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+                tableSet(&vm.globals, name, stackPeek(0));
+                stackPop();
+                break;
+            }
+            case OP_GET_GLOBAL: {
+                ObjString* name = AS_STRING(READ_CONSTANT());
+                Value value;
+                if (!tableGet(&vm.globals, name, &value)) {
+                    runtimeError("Undefined variable '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                stackPush(value);
+                break;
+            }
+            case OP_GET_GLOBAL_LONG: {
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+                tableSet(&vm.globals, name, stackPeek(0));
+                stackPop();
+                break;
+            }
+            case OP_SET_GLOBAL: {
+                ObjString* name = AS_STRING(READ_CONSTANT());
+                if (tableSet(&vm.globals, name, stackPeek(0))) {
+                    runtimeError("Assignment to undefined variable '%s'", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_SET_GLOBAL_LONG: {
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+                if (tableSet(&vm.globals, name, stackPeek(0))) {
+                    runtimeError("Assignment to undefined variable '%s'", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }

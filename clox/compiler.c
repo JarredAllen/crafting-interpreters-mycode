@@ -22,16 +22,21 @@ Chunk* targetChunk;
 
 static void advance();
 static void consume();
+static void declaration();
 static void endCompiler();
 static void expression();
 static void initParser();
+static bool match(TokenType);
+static void statement();
 
 bool compile(const char* source, Chunk* chunk) {
     initLexer(source);
     initParser();
     targetChunk = chunk;
     advance();
-    expression();
+    while (!match(TOKEN_EOF)) {
+        declaration();
+    }
     consume(TOKEN_EOF, "Expected end of expression");
     endCompiler();
     return !parser.hadError;
@@ -71,10 +76,18 @@ static void advance() {
     }
 }
 
+static bool check(TokenType type) {
+    return parser.current.type == type;
+}
+static bool match(TokenType type) {
+    if (!check(type)) {
+        return false;
+    }
+    advance();
+    return true;
+}
 static void consume(TokenType type, const char* message) {
-    if (parser.current.type == type) {
-        advance();
-    } else {
+    if (!match(type)) {
         errorAtCurrent(message);
     }
 }
@@ -84,6 +97,96 @@ static void emitByte(uint8_t byte) {
 }
 static void emitConstant(Value constant) {
     writeConstant(targetChunk, constant, parser.previous.line);
+}
+
+static void synchronize() {
+    parser.panicMode = false;
+    while (parser.current.type != TOKEN_EOF) {
+        if (parser.previous.type == TOKEN_SEMICOLON) {
+            return;
+        }
+        switch (parser.current.type) {
+            case TOKEN_CLASS:
+            case TOKEN_FUN:
+            case TOKEN_VAR:
+            case TOKEN_FOR:
+            case TOKEN_IF:
+            case TOKEN_WHILE:
+            case TOKEN_PRINT:
+            case TOKEN_RETURN:
+                return;
+            default: // Do nothing
+                ;
+        }
+        advance();
+    }
+}
+
+static uint64_t identifierConstant(Token* name) {
+    return addConstant(targetChunk, OBJ_VAL(copyString(name->start, name->length)));
+}
+// Make a new variable (or error if the next token isn't an identifier)
+// and point to its location in the constants table
+static uint64_t parseVariable(const char* errorMessage) {
+    consume(TOKEN_IDENTIFIER, errorMessage);
+    return identifierConstant(&parser.previous);
+}
+// Make an instruction to define the variable whose name is at the given
+// index of the constants table.
+// Will error if the index is too large
+static void defineVariable(uint64_t index) {
+    if (index <= 0xFF) {
+        emitByte(OP_DEFINE_GLOBAL);
+        emitByte((uint8_t)index);
+    } else if (index <= 0xFFFF) {
+        emitByte(OP_DEFINE_GLOBAL_LONG);
+        emitByte((uint8_t)(index & 0xFF));
+        emitByte((uint8_t)((index >> 8) & 0xFF));
+    } else {
+        fprintf(stderr, "Global variable names must be in the first 65536 entries of the constants table");
+        exit(-1);
+    }
+}
+static void varDeclaration() {
+    uint64_t global = parseVariable("Expected a variable name");
+    if (match(TOKEN_EQUAL)) {
+        expression();
+    } else {
+        emitByte(OP_NIL);
+    }
+    consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
+    defineVariable(global);
+}
+
+static void declaration() {
+    if (match(TOKEN_VAR)) {
+        varDeclaration();
+    } else {
+        statement();
+    }
+    if (parser.panicMode) {
+        synchronize();
+    }
+}
+
+static void printStatement() {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expected ';' at end of print statement");
+    emitByte(OP_PRINT);
+}
+
+static void expressionStatement() {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expected ';' at the end of expression statement");
+    emitByte(OP_POP);
+}
+
+static void statement() {
+    if (match(TOKEN_PRINT)) {
+        printStatement();
+    } else {
+        expressionStatement();
+    }
 }
 
 typedef enum {
@@ -100,7 +203,7 @@ typedef enum {
     PREC_PRIMARY,
 } Precedence;
 
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(bool canAssign);
 typedef struct {
     ParseFn prefix;
     ParseFn infix;
@@ -111,14 +214,43 @@ static ParseRule* getRule(TokenType type);
 
 static void parsePrecedence(Precedence precedence);
 
-static void number() {
+static void number(__attribute__((unused)) bool canAssign) {
     double value = strtod(parser.previous.start, NULL);
     emitConstant(NUMBER_VAL(value));
 }
-static void string() {
+static void string(__attribute__((unused)) bool canAssign) {
     emitConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length-2)));
 }
-static void literal() {
+static void namedVariable(Token name, bool canAssign) {
+    uint64_t index = identifierConstant(&name);
+    bool assign = canAssign && match(TOKEN_EQUAL);
+    if (assign) {
+        expression();
+    }
+    if (index <= 0xFF) {
+        if (assign) {
+            emitByte(OP_SET_GLOBAL);
+        } else {
+            emitByte(OP_GET_GLOBAL);
+        }
+        emitByte((uint8_t) index);
+    } else if (index <= 0xFFFF) {
+        if (assign) {
+            emitByte(OP_SET_GLOBAL_LONG);
+        } else {
+            emitByte(OP_GET_GLOBAL_LONG);
+        }
+        emitByte((uint8_t)(index & 0xFF));
+        emitByte((uint8_t)((index >> 8) & 0xFF));
+    } else {
+        fprintf(stderr, "Global variable names must be in the first 65536 entries of the constants table");
+        exit(-1);
+    }
+}
+static void variable(bool canAssign) {
+    namedVariable(parser.previous, canAssign);
+}
+static void literal(__attribute__((unused)) bool canAssign) {
     switch (parser.previous.type) {
         case TOKEN_FALSE: emitByte(OP_FALSE); break;
         case TOKEN_NIL: emitByte(OP_NIL); break;
@@ -126,11 +258,11 @@ static void literal() {
         default: fprintf(stderr, "Unreachable line reached in <literal>"); return;
     }
 }
-static void grouping() {
+static void grouping(__attribute__((unused)) bool canAssign) {
     expression();
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression");
 }
-static void unary() {
+static void unary(__attribute__((unused)) bool canAssign) {
     TokenType operatorType = parser.previous.type;
     parsePrecedence(PREC_UNARY);
     switch (operatorType) {
@@ -139,7 +271,7 @@ static void unary() {
         default: fprintf(stderr, "Unreachable line reached in <unary>");
     }
 }
-static void binary() {
+static void binary(__attribute__((unused)) bool canAssign) {
     TokenType operatorType = parser.previous.type;
 
     ParseRule* rule = getRule(operatorType);
@@ -169,11 +301,15 @@ static void parsePrecedence(Precedence precedence) {
         error("Expected expression");
         return;
     }
-    prefixRule();
+    bool canAssign = precedence <= PREC_ASSIGNMENT;
+    prefixRule(canAssign);
     while (precedence <= getRule(parser.current.type)->precedence) {
         advance();
         ParseFn infixRule = getRule(parser.previous.type)->infix;
-        infixRule();
+        infixRule(canAssign);
+    }
+    if (canAssign && match(TOKEN_EQUAL)) {
+        error("Invalid assignment target");
     }
 }
 
@@ -197,7 +333,7 @@ ParseRule rules[] = {
     [TOKEN_GREATER_EQUAL] = { NULL,     binary, PREC_COMPARISON },
     [TOKEN_LESS]          = { NULL,     binary, PREC_COMPARISON },
     [TOKEN_LESS_EQUAL]    = { NULL,     binary, PREC_COMPARISON },
-    [TOKEN_IDENTIFIER]    = { NULL,     NULL,   PREC_NONE },
+    [TOKEN_IDENTIFIER]    = { variable, NULL,   PREC_NONE },
     [TOKEN_STRING]        = { string,   NULL,   PREC_NONE },
     [TOKEN_NUMBER]        = { number,   NULL,   PREC_NONE },
     [TOKEN_AND]           = { NULL,     NULL,   PREC_NONE },
@@ -224,7 +360,6 @@ static ParseRule* getRule(TokenType type) {
 }
 
 static void endCompiler() {
-    emitByte(OP_RETURN);
 #ifdef DEBUG_PRINT_CODE
     disassembleChunk(targetChunk, "code");
 #endif
