@@ -31,6 +31,9 @@ typedef enum {
     OP_NOT,
     // Control flow
     OP_RETURN,
+    OP_JUMP,
+    OP_JUMP_IF_TRUE,
+    OP_JUMP_IF_FALSE,
     // Input/outpuit
     OP_PRINT,
     // Global variable manipulation

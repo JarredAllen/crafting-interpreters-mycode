@@ -28,10 +28,22 @@ void freeVM() {
     freeObjects();
 }
 
+static void runtimeError(const char* format, ...);
 static void stackPush(Value value) {
     *vm.stackTop++ = value;
+#ifdef DEBUG_RUNTIME_CHECKS
+    if (vm.stackTop >= vm.stack+STACK_MAX) {
+        runtimeError("Stack overflow");
+    }
+#endif
 }
 static Value stackPop() {
+#ifdef DEBUG_RUNTIME_CHECKS
+        if (vm.stackTop <= vm.stack) {
+            fprintf(stderr, "Stack underflow\n");
+            exit(-1);
+        }
+#endif
     return *--vm.stackTop;
 }
 
@@ -70,8 +82,9 @@ static void runtimeError(const char* format, ...) {
 
 // Define some aliases for common functions used in the run function
 #define READ_BYTE() (*vm.ip++)
+#define READ_TWO_BYTES() ((uint16_t)*vm.ip++ + (uint16_t)(*vm.ip++ << 8))
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
-#define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_BYTE() | (READ_BYTE() << 8)])
+#define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_TWO_BYTES()])
 #define BINARY_OP(valueType, op) \
     do { \
         if (!IS_NUMBER(stackPeek(0)) || !IS_NUMBER(stackPeek(1))) { \
@@ -85,12 +98,6 @@ static void runtimeError(const char* format, ...) {
 static InterpretResult run() {
     uint8_t instruction;
     for (;;) {
-#ifdef DEBUG_RUNTIME_CHECKS
-        if (vm.stackTop < vm.stack) {
-            fprintf(stderr, "Stack size somehow became negative.\n");
-            exit(-1);
-        }
-#endif
         if (vm.ip >= vm.chunk->code + vm.chunk->length) {
             // We've reached the end of the program, so return
             return INTERPRET_OK;
@@ -231,7 +238,7 @@ static InterpretResult run() {
                 break;
             }
             case OP_GET_LOCAL_LONG: {
-                uint16_t slot = (uint16_t)READ_BYTE() + ((uint16_t)READ_BYTE() << 8);
+                uint16_t slot = READ_TWO_BYTES();
                 stackPush(vm.stack[slot]);
                 break;
             }
@@ -241,8 +248,26 @@ static InterpretResult run() {
                 break;
             }
             case OP_SET_LOCAL_LONG: {
-                uint16_t slot = (uint16_t)READ_BYTE() + ((uint16_t)READ_BYTE() << 8);
+                uint16_t slot = READ_TWO_BYTES();
                 vm.stack[slot] = stackPeek(0);
+                break;
+            }
+            case OP_JUMP_IF_TRUE: {
+                int16_t target = (int16_t)READ_TWO_BYTES();
+                if (truthy(stackPeek(0))) {
+                    vm.ip += target;
+                }
+                break;
+            }
+            case OP_JUMP_IF_FALSE: {
+                int16_t target = (int16_t)READ_TWO_BYTES();
+                if (!truthy(stackPeek(0))) {
+                    vm.ip += target;
+                }
+                break;
+            }
+            case OP_JUMP: {
+                vm.ip += (int16_t)READ_TWO_BYTES();
                 break;
             }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
@@ -253,4 +278,5 @@ static InterpretResult run() {
 #undef BINARY_OP
 #undef READ_CONSTANT_LONG
 #undef READ_CONSTANT
+#undef READ_TWO_BYTES
 #undef READ_BYTE

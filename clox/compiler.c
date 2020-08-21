@@ -259,6 +259,95 @@ static void endScope() {
     }
 }
 
+// Emit a jump with a placeholder length (0xFFFF) and return the
+// index of the jump instruction's argument in the chunk
+static int emitJump(uint8_t instruction) {
+    emitByte(instruction);
+    emitByte(0xFF);
+    emitByte(0xFF);
+    return targetChunk->length - 2;
+}
+static void emitKnownJump(uint8_t instruction, int destination) {
+    int jumpLength = destination - targetChunk->length - 3;
+    emitByte(instruction);
+    emitByte(jumpLength & 0xFF);
+    emitByte((jumpLength >> 8) & 0xFF);
+}
+static void patchJump(int offset) {
+    int jumpLength = targetChunk->length - offset - 2;
+    if (jumpLength > 0x7FFF) {
+        error("Jumping over too much code");
+    }
+    targetChunk->code[offset] = jumpLength & 0xFF;
+    targetChunk->code[offset+1] = (jumpLength >> 8) & 0xFF;
+}
+static void ifStatement() {
+    consume(TOKEN_LEFT_PAREN, "Expected '(' after 'if'");
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after condition");
+    int thenJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    statement();
+    int elseJump = emitJump(OP_JUMP);
+    patchJump(thenJump);
+    emitByte(OP_POP);
+    if (match(TOKEN_ELSE)) {
+        statement();
+    }
+    patchJump(elseJump);
+}
+static void whileStatement() {
+    consume(TOKEN_LEFT_PAREN, "Expected '(' after 'while'");
+    int loopStart = targetChunk->length;
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after condition");
+    int exitJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    statement();
+    emitKnownJump(OP_JUMP, loopStart);
+    patchJump(exitJump);
+    emitByte(OP_POP);
+}
+static void forStatement() {
+    beginScope();
+    consume(TOKEN_LEFT_PAREN, "Expected '(' after 'for'");
+    if (match(TOKEN_SEMICOLON)) {
+        // No initializer, so we do nothing
+    } else if (match(TOKEN_VAR)) {
+        varDeclaration();
+    } else {
+        expressionStatement();
+    }
+    int loopStart = targetChunk->length;
+    int exitJump = -1;
+    if (match(TOKEN_SEMICOLON)) {
+        // No condition, so we do nothing
+    } else {
+        expression();
+        consume(TOKEN_SEMICOLON, "Expected ';' between for clauses");
+        exitJump = emitJump(OP_JUMP_IF_FALSE);
+    }
+    if (match(TOKEN_RIGHT_PAREN)) {
+        // No increment, so we do nothing
+    } else {
+        int bodyJump = emitJump(OP_JUMP);
+        int incrementStart = targetChunk->length;
+        expression();
+        emitByte(OP_POP);
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after for clauses");
+        emitKnownJump(OP_JUMP, loopStart);
+        loopStart = incrementStart;
+        patchJump(bodyJump);
+    }
+    statement();
+    emitKnownJump(OP_JUMP, loopStart);
+    endScope();
+    if (exitJump != -1) {
+        patchJump(exitJump);
+        emitByte(OP_POP);
+    }
+}
+
 static void statement() {
     if (match(TOKEN_PRINT)) {
         printStatement();
@@ -266,6 +355,12 @@ static void statement() {
         beginScope();
         block();
         endScope();
+    } else if (match(TOKEN_IF)) {
+        ifStatement();
+    } else if (match(TOKEN_WHILE)) {
+        whileStatement();
+    } else if (match(TOKEN_FOR)) {
+        forStatement();
     } else {
         expressionStatement();
     }
@@ -400,6 +495,18 @@ static void binary(__attribute__((unused)) bool canAssign) {
         default:          fprintf(stderr, "Unreachable line reached in <binary>"); return;
     }
 }
+static void and_(__attribute__((unused)) bool canAssign) {
+    int endJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    parsePrecedence(PREC_AND);
+    patchJump(endJump);
+}
+static void or_(__attribute__((unused)) bool canAssign) {
+    int endJump = emitJump(OP_JUMP_IF_TRUE);
+    emitByte(OP_POP);
+    parsePrecedence(PREC_OR);
+    patchJump(endJump);
+}
 static void expression() {
     parsePrecedence(PREC_ASSIGNMENT);
 }
@@ -446,7 +553,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER]    = { variable, NULL,   PREC_NONE },
     [TOKEN_STRING]        = { string,   NULL,   PREC_NONE },
     [TOKEN_NUMBER]        = { number,   NULL,   PREC_NONE },
-    [TOKEN_AND]           = { NULL,     NULL,   PREC_NONE },
+    [TOKEN_AND]           = { NULL,     and_,   PREC_AND  },
     [TOKEN_CLASS]         = { NULL,     NULL,   PREC_NONE },
     [TOKEN_ELSE]          = { NULL,     NULL,   PREC_NONE },
     [TOKEN_FALSE]         = { literal,  NULL,   PREC_NONE },
@@ -454,7 +561,7 @@ ParseRule rules[] = {
     [TOKEN_FUN]           = { NULL,     NULL,   PREC_NONE },
     [TOKEN_IF]            = { NULL,     NULL,   PREC_NONE },
     [TOKEN_NIL]           = { literal,  NULL,   PREC_NONE },
-    [TOKEN_OR]            = { NULL,     NULL,   PREC_NONE },
+    [TOKEN_OR]            = { NULL,     or_,    PREC_OR   },
     [TOKEN_PRINT]         = { NULL,     NULL,   PREC_NONE },
     [TOKEN_RETURN]        = { NULL,     NULL,   PREC_NONE },
     [TOKEN_SUPER]         = { NULL,     NULL,   PREC_NONE },
