@@ -14,6 +14,7 @@ static void freeObject(Obj* object) {
             freeChunk(&function->chunk);
             break;
         }
+        case OBJ_NATIVE: break;
     }
     free(object);
 }

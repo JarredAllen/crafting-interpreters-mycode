@@ -8,19 +8,26 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 VM vm;
+
+static Value clockNative(__attribute__((unused))int argCount, __attribute__((unused))Value* args) {
+    return NUMBER_VAL(((double)clock()) / CLOCKS_PER_SEC);
+}
 
 static void resetStack() {
     vm.stackTop = vm.stack;
     vm.frameCount = 0;
 }
 
+static void defineNative(const char* name, NativeFn function);
 void initVM() {
     resetStack();
     initTable(&vm.strings);
     initTable(&vm.globals);
     vm.objects = NULL;
+    defineNative("clock", clockNative);
 }
 
 void freeVM() {
@@ -52,6 +59,15 @@ static Value stackPeek(int distance) {
     return vm.stackTop[-1 - distance];
 }
 
+static void defineNative(const char* name, NativeFn function) {
+    // Push them onto the stack just to ensure the GC knows we're
+    // using them
+    stackPush(OBJ_VAL(copyString(name, (int)strlen(name))));
+    stackPush(OBJ_VAL(newNative(function)));
+    tableSet(&vm.globals, (ObjString*)vm.stack[0].as.obj, vm.stack[1]);
+    stackPop();
+    stackPop();
+}
 static bool call(ObjFunction* function, int argCount) {
     if (argCount != function->arity) {
         runtimeError("Expected %d arguments but got %d", function->arity, argCount);
@@ -71,6 +87,13 @@ static bool callValue(Value callee, int argCount) {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
             case OBJ_FUNCTION: return call((ObjFunction*)callee.as.obj, argCount);
+            case OBJ_NATIVE: {
+                NativeFn native = ((ObjNative*)callee.as.obj)->function;
+                Value result = native(argCount, vm.stackTop - argCount);
+                vm.stackTop -= argCount + 1;
+                stackPush(result);
+                return true;
+            }
             default:           break;
         }
     }
