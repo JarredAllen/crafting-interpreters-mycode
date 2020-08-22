@@ -9,6 +9,11 @@ static void freeObject(Obj* object) {
             free(((ObjString*)object)->chars);
             break;
         }
+        case OBJ_FUNCTION: {
+            ObjFunction* function = (ObjFunction*)object;
+            freeChunk(&function->chunk);
+            break;
+        }
     }
     free(object);
 }

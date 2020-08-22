@@ -54,11 +54,24 @@ ObjString* copyString(const char* chars, int length) {
     return allocateString(heapChars, length, hashString(heapChars, length));
 }
 
+static void printFunction(ObjFunction* function) {
+    if (function->name) {
+        printf("<fn %s>", function->name->chars);
+    } else {
+        printf("<script>");
+    }
+}
+
 void printObject(Obj* object) {
     switch (object->type) {
-        case OBJ_STRING:
+        case OBJ_STRING: {
             printf("%s", ((ObjString*)object)->chars);
             break;
+        }
+        case OBJ_FUNCTION: {
+            printFunction((ObjFunction*)object);
+            break;
+        }
     }
 }
 
@@ -71,6 +84,9 @@ bool objectsEqual(Obj* a, Obj* b) {
             char* aStr = ((ObjString*)a)->chars;
             char* bStr = ((ObjString*)b)->chars;
             return strcmp(aStr, bStr) == 0;
+        }
+        case OBJ_FUNCTION: {
+            return a == b;
         }
     }
 }
@@ -102,4 +118,12 @@ static ObjString* tableFindString(Table* table, const char* chars, int length, u
             exit(-1);
         }
     }
+}
+
+ObjFunction* newFunction() {
+    ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+    function->arity = 0;
+    function->name = NULL;
+    initChunk(&function->chunk);
+    return function;
 }

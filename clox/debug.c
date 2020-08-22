@@ -22,6 +22,11 @@ static int localVariableInstruction(const char* name, Chunk* chunk, int offset) 
     printf("%-21s slot %d\n", name, slot);
     return offset + 2;
 }
+static int parameterInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t parameter = chunk->code[offset+1];
+    printf("%-21s 0x%04x\n", name, parameter);
+    return offset + 2;
+}
 static int longConstantInstruction(const char* name, Chunk* chunk, int offset) {
     uint16_t constant = (uint16_t)(chunk->code[offset+1]) + (uint16_t)(chunk->code[offset+2] << 8);
     printf("%-21s 0x%04x '", name, constant);
@@ -121,6 +126,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return jumpInstruction("OP_JUMP_IF_TRUE", chunk, offset);
         case OP_JUMP_IF_FALSE:
             return jumpInstruction("OP_JUMP_IF_FALSE", chunk, offset);
+        case OP_CALL:
+            return parameterInstruction("OP_CALL", chunk, offset);
         default:
             printf("Unknown opcode: 0x%x\n", instruction);
             return offset + 1;

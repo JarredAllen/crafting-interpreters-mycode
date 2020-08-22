@@ -29,8 +29,10 @@ typedef enum {
     OP_GE,
     // Boolean logic
     OP_NOT,
-    // Control flow
+    // Functions
     OP_RETURN,
+    OP_CALL,
+    // Control flow
     OP_JUMP,
     OP_JUMP_IF_TRUE,
     OP_JUMP_IF_FALSE,
