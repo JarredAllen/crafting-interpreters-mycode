@@ -50,6 +50,8 @@ typedef enum {
     OP_GET_LOCAL_LONG,
     OP_SET_LOCAL,
     OP_SET_LOCAL_LONG,
+    // Other
+    OP_NOP,
 } OpCode;
 
 typedef struct {

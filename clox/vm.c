@@ -337,6 +337,7 @@ static InterpretResult run() {
                 frame = &vm.frames[vm.frameCount-1];
                 break;
             }
+            case OP_NOP: break;
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }

@@ -420,6 +420,9 @@ static void statement() {
         whileStatement();
     } else if (match(TOKEN_FOR)) {
         forStatement();
+    } else if (match(TOKEN_SEMICOLON)) {
+        // Convert empty statements to nops
+        emitByte(OP_NOP);
     } else {
         expressionStatement();
     }
