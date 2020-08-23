@@ -1,0 +1,42 @@
+// A script which uses the closure functionality to emulate 2d vectors
+
+// It should produce the following output:
+// Vector2(x: 1, y: 0)
+// 1
+// 0
+// Vector2(x: 0, y: 1)
+// 1
+// 0
+// Sum of above two
+// 1
+// 1
+
+fun vector2(x, y) {
+    fun get_component(name) {
+        if (name == "x") {
+            return x;
+        } else if (name == "y") {
+            return y;
+        } else {
+            return nil;
+        }
+    }
+    return get_component;
+}
+
+fun sum_vectors(v1, v2) {
+    return vector2(v1("x")+v2("x"), v1("y")+v2("y"));
+}
+
+var va = vector2(1, 0);
+print "Vector2(x: 1, y: 0)";
+print va("x");
+print va("y");
+var vb = vector2(0, 1);
+print "Vector2(x: 0, y: 1)";
+print va("x");
+print va("y");
+var vsum = sum_vectors(va, vb);
+print "Sum of above two";
+print vsum("x");
+print vsum("y");
