@@ -30,7 +30,7 @@ static bool isAlpha(char);
 static Token identifier();
 
 #define ADVANCE() (*lexer.current++)
-#define PEEKN(n) (*lexer.current+n-1)
+#define PEEKN(n) (*(lexer.current+n-1))
 #define PEEK() PEEKN(1)
 Token scanToken() {
     skipWhitespace();
@@ -69,6 +69,7 @@ Token scanToken() {
         // Literals
         case '"': return string();
     }
+    printf("Errored on character '%c'\n", c);
     return errorToken("Unexpected character.");
 }
 
@@ -83,14 +84,17 @@ static void skipWhitespace() {
                 ADVANCE();
                 break;
             // Skip comments
-            case '/':
+            case '/': {
                 if (PEEKN(2) == '/') {
-                    while (PEEK() != '\n' && !isAtEnd()) {
+                    // printf("Skipping comment on line %d\n", lexer.line);
+                    while (!isAtEnd() && PEEK() != '\n') {
                         ADVANCE();
                     }
                 } else {
                     return;
                 }
+                break;
+            }
             default: return;
         }
     }
