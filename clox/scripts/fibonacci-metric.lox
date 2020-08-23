@@ -5,7 +5,8 @@
 // 2.17831e+06
 // Time taken (seconds):
 
-// The last line indicates how long it took to run (typically about 0.8 seconds).
+// The last line indicates how long it took to run (typically about 0.81 seconds
+// if compiled with -Og, or 0.43 seconds if compiled with -O2).
 
 fun fibonacci(n) {
     if (n < 2) {
