@@ -14,9 +14,16 @@
 typedef struct {
     Token name;
     int depth;
+    bool isCaptured;
 } Local;
 
+typedef struct {
+    uint8_t index;
+    bool isLocal;
+} Upvalue;
+
 #define MAX_LOCALS 65536
+#define MAX_UPVALUES 256
 
 typedef enum {
     TYPE_FUNCTION,
@@ -30,6 +37,7 @@ typedef struct Compiler {
     int localCount;
     int scopeDepth;
     Local* locals;
+    Upvalue* upvalues;
 } Compiler;
 Compiler* currentCompiler = NULL;
 
@@ -64,6 +72,7 @@ ObjFunction* compile(const char* source) {
     }
     consume(TOKEN_EOF, "Expected end of expression");
     ObjFunction* function = endCompiler();
+    free(compiler.upvalues);
     return parser.hadError ? NULL : function;
 }
 
@@ -236,7 +245,11 @@ static void beginScope() {
 static void endScope() {
     currentCompiler->scopeDepth--;
     while (currentCompiler->localCount > 0 && currentCompiler->locals[currentCompiler->localCount-1].depth > currentCompiler->scopeDepth) {
-        emitByte(OP_POP);
+        if (currentCompiler->locals[currentCompiler->localCount-1].isCaptured) {
+            emitByte(OP_CLOSE_UPVALUE);
+        } else {
+            emitByte(OP_POP);
+        }
         currentCompiler->localCount--;
     }
 }
@@ -269,7 +282,23 @@ static void function(FunctionType type) {
     consume(TOKEN_LEFT_BRACE, "Expected '{' before function body");
     block();
     ObjFunction* function = endCompiler();
-    emitConstant(OBJ_VAL(function));
+    uint64_t function_index = addConstant(&currentCompiler->function->chunk, OBJ_VAL(function));
+    if (function_index <= 0xFF) {
+        emitByte(OP_CLOSURE);
+        emitByte(function_index);
+    } else if (function_index <= 0xFFFF) {
+        emitByte(OP_CLOSURE_LONG);
+        emitByte(function_index & 0xFF);
+        emitByte(function_index >> 8);
+    } else {
+        fprintf(stderr, "Cannot have function past index 65536 in constants array");
+        exit(-1);
+    }
+    for (int i=0; i<function->upvalueCount; i++) {
+        emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+        emitByte(compiler.upvalues[i].index);
+    }
+    free(compiler.upvalues);
 }
 static void funDeclaration() {
     uint64_t global = parseVariable("Expected function name.");
@@ -468,6 +497,41 @@ static int64_t resolveLocal(Compiler* compiler, Token* name) {
     }
     return -1;
 }
+static int64_t addUpvalue(Compiler* compiler, uint64_t index, bool isLocal) {
+    int upvalueCount = compiler->function->upvalueCount;
+    for (int i=0; i<upvalueCount; i++) {
+        Upvalue* upvalue = &compiler->upvalues[i];
+        if (upvalue->index == index && upvalue->isLocal == isLocal) {
+            return i;
+        }
+    }
+    if (index >= 0xFF) {
+        error("Cannot capture as closure a variable not in the first 256 slots");
+        return -1;
+    }
+    if (upvalueCount == MAX_UPVALUES) {
+        error("Too many closure variables in function");
+        return -1;
+    }
+    compiler->upvalues[upvalueCount].isLocal = isLocal;
+    compiler->upvalues[upvalueCount].index = index;
+    return compiler->function->upvalueCount++;
+}
+static int64_t resolveUpvalue(Compiler* compiler, Token* name) {
+    if (compiler->enclosing == NULL) {
+        return -1;
+    }
+    int local = resolveLocal(compiler->enclosing, name);
+    if (local != -1) {
+        compiler->enclosing->locals[local].isCaptured = true;
+        return addUpvalue(compiler, (uint64_t)local, true);
+    }
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+        return addUpvalue(compiler, (uint64_t)local, false);
+    }
+    return -1;
+}
 static void namedVariable(Token name, bool canAssign) {
     uint8_t getOp, setOp;
     int arg = resolveLocal(currentCompiler, &name);
@@ -482,6 +546,15 @@ static void namedVariable(Token name, bool canAssign) {
             setOp = OP_SET_LOCAL_LONG;
         } else {
             fprintf(stderr, "Can have no more than 65536 local variables in scope at a time");
+            exit(-1);
+        }
+    } else if ((arg = resolveUpvalue(currentCompiler, &name)) != -1) {
+        if (arg <= 0xFF) {
+            getOp = OP_GET_UPVALUE;
+            setOp = OP_SET_UPVALUE;
+            index = arg;
+        } else {
+            fprintf(stderr, "Functions can not close over more than 256 values");
             exit(-1);
         }
     } else {
@@ -510,7 +583,7 @@ static void namedVariable(Token name, bool canAssign) {
         emitByte((uint8_t)(index & 0xFF));
         emitByte((uint8_t)((index >> 8) & 0xFF));
     } else {
-        fprintf(stderr, "Global variable names must be in the first 65536 entries of the constants table");
+        fprintf(stderr, "Variable names must be in the first 65536 entries of the constants table");
         exit(-1);
     }
 }
@@ -685,9 +758,11 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     compiler->scopeDepth = 0;
     compiler->function = newFunction();
     compiler->locals = (Local*)malloc(sizeof(Local)*MAX_LOCALS);
+    compiler->upvalues = (Upvalue*)malloc(sizeof(Upvalue)*MAX_UPVALUES);
     currentCompiler = compiler;
 
-    // Stack slot 0 is reserved by the compiler for internal use
+    // Stack slot 0 is reserved by the compiler for internal use. It
+    // stores the function currently being evaluated
     if (type != TYPE_SCRIPT) {
         currentCompiler->function->name = copyString(parser.previous.start, parser.previous.length);
     }
@@ -695,4 +770,5 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
+    local->isCaptured = false;
 }

@@ -7,6 +7,7 @@
 #include "value.h"
 
 typedef enum {
+    OP_NOP,
     // Direct stack manipulation
     OP_CONSTANT,
     OP_CONSTANT_LONG,
@@ -32,6 +33,8 @@ typedef enum {
     // Functions
     OP_RETURN,
     OP_CALL,
+    OP_CLOSURE,
+    OP_CLOSURE_LONG,
     // Control flow
     OP_JUMP,
     OP_JUMP_IF_TRUE,
@@ -50,8 +53,10 @@ typedef enum {
     OP_GET_LOCAL_LONG,
     OP_SET_LOCAL,
     OP_SET_LOCAL_LONG,
-    // Other
-    OP_NOP,
+    // Nonlocal variable manipulation
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
+    OP_CLOSE_UPVALUE,
 } OpCode;
 
 typedef struct {

@@ -15,6 +15,12 @@ static void freeObject(Obj* object) {
             break;
         }
         case OBJ_NATIVE: break;
+        case OBJ_CLOSURE: {
+            ObjClosure* closure = (ObjClosure*)object;
+            free(closure->upvalues);
+            break;
+        }
+        case OBJ_UPVALUE: break;
     }
     free(object);
 }

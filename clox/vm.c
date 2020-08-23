@@ -19,6 +19,7 @@ static Value clockNative(__attribute__((unused))int argCount, __attribute__((unu
 static void resetStack() {
     vm.stackTop = vm.stack;
     vm.frameCount = 0;
+    vm.openUpvalues = NULL;
 }
 
 static void defineNative(const char* name, NativeFn function);
@@ -38,12 +39,12 @@ void freeVM() {
 
 static void runtimeError(const char* format, ...);
 static void stackPush(Value value) {
-    *vm.stackTop++ = value;
 #ifdef DEBUG_RUNTIME_CHECKS
     if (vm.stackTop >= vm.stack+STACK_MAX) {
         runtimeError("Stack overflow");
     }
 #endif
+    *vm.stackTop++ = value;
 }
 static Value stackPop() {
 #ifdef DEBUG_RUNTIME_CHECKS
@@ -68,9 +69,9 @@ static void defineNative(const char* name, NativeFn function) {
     stackPop();
     stackPop();
 }
-static bool call(ObjFunction* function, int argCount) {
-    if (argCount != function->arity) {
-        runtimeError("Expected %d arguments but got %d", function->arity, argCount);
+static bool call(ObjClosure* closure, int argCount) {
+    if (argCount != closure->function->arity) {
+        runtimeError("Expected %d arguments but got %d", closure->function->arity, argCount);
         return false;
     }
     if (vm.frameCount >= FRAMES_MAX) {
@@ -78,15 +79,15 @@ static bool call(ObjFunction* function, int argCount) {
         return false;
     }
     CallFrame* frame = &vm.frames[vm.frameCount++];
-    frame->function = function;
-    frame->ip = function->chunk.code;
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
     frame->slots = vm.stackTop - argCount - 1;
     return true;
 }
 static bool callValue(Value callee, int argCount) {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
-            case OBJ_FUNCTION: return call((ObjFunction*)callee.as.obj, argCount);
+            case OBJ_CLOSURE: return call((ObjClosure*)callee.as.obj, argCount);
             case OBJ_NATIVE: {
                 NativeFn native = ((ObjNative*)callee.as.obj)->function;
                 Value result = native(argCount, vm.stackTop - argCount);
@@ -109,7 +110,10 @@ InterpretResult interpret(const char* source) {
         return INTERPRET_COMPILE_ERROR;
     }
     stackPush(OBJ_VAL(function));
-    callValue(OBJ_VAL(function), 0);
+    ObjClosure* closure = newClosure(function);
+    stackPop();
+    stackPush(OBJ_VAL(closure));
+    callValue(OBJ_VAL(closure), 0);
     return run();
 }
 
@@ -121,7 +125,7 @@ static void runtimeError(const char* format, ...) {
     fputs("\n", stderr);
     for (int i=vm.frameCount-1; i >= 0; i--) {
         CallFrame* frame = &vm.frames[i];
-        ObjFunction* function = frame->function;
+        ObjFunction* function = frame->closure->function;
         size_t instruction = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
         if (function->name == NULL) {
@@ -133,11 +137,42 @@ static void runtimeError(const char* format, ...) {
     resetStack();
 }
 
+static ObjUpvalue* captureUpvalue(Value* local) {
+    // Check if the upvalue has already been created
+    ObjUpvalue* prevUpvalue = NULL;
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    while (upvalue != NULL && upvalue->location > local) {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
+    // Create it if it hasn't been created already
+    ObjUpvalue* createdUpvalue = newUpvalue(local);
+    createdUpvalue->next = upvalue;
+    if (prevUpvalue == NULL) {
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue->next = createdUpvalue;
+    }
+    return createdUpvalue;
+}
+
+static void closeUpvalues(Value* last) {
+    while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
+        ObjUpvalue* upvalue = vm.openUpvalues;
+        upvalue->closed = *upvalue->location;
+        upvalue->location = &upvalue->closed;
+        vm.openUpvalues = upvalue->next;
+    }
+}
+
 // Define some aliases for common functions used in the run function
 #define READ_BYTE() (*frame->ip++)
 #define READ_TWO_BYTES() ((uint16_t)READ_BYTE() + (uint16_t)(READ_BYTE() << 8))
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
-#define READ_CONSTANT_LONG() (frame->function->chunk.constants.values[READ_TWO_BYTES()])
+#define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT_LONG() (frame->closure->function->chunk.constants.values[READ_TWO_BYTES()])
 #define BINARY_OP(valueType, op) \
     do { \
         if (!IS_NUMBER(stackPeek(0)) || !IS_NUMBER(stackPeek(1))) { \
@@ -159,11 +194,12 @@ static InterpretResult run() {
             printf(" ]");
         }
         printf("\n");
-        disassembleInstruction(&frame->function->chunk, (int)(frame->ip - frame->function->chunk.code));
+        disassembleInstruction(&frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
 #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN: {
                 Value result = stackPop();
+                closeUpvalues(frame->slots);
                 vm.frameCount--;
                 if (vm.frameCount == 0) {
                     stackPop();
@@ -338,6 +374,36 @@ static InterpretResult run() {
                 break;
             }
             case OP_NOP: break;
+            case OP_CLOSURE: {
+                ObjFunction* function = (ObjFunction*)READ_CONSTANT().as.obj;
+                ObjClosure* closure = newClosure(function);
+                stackPush(OBJ_VAL(closure));
+                for (int i=0; i<closure->upvalueCount; i++) {
+                    uint8_t isLocal = READ_BYTE();
+                    uint8_t index = READ_BYTE();
+                    if (isLocal) {
+                        closure->upvalues[i] = captureUpvalue(frame->slots + index);
+                    } else {
+                        closure->upvalues[i] = frame->closure->upvalues[index];
+                    }
+                }
+                break;
+            }
+            case OP_GET_UPVALUE: {
+                uint8_t slot = READ_BYTE();
+                stackPush(*frame->closure->upvalues[slot]->location);
+                break;
+            }
+            case OP_SET_UPVALUE: {
+                uint8_t slot = READ_BYTE();
+                *frame->closure->upvalues[slot]->location = stackPeek(0);
+                break;
+            }
+            case OP_CLOSE_UPVALUE: {
+                closeUpvalues(vm.stackTop - 1);
+                stackPop();
+                break;
+            }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }

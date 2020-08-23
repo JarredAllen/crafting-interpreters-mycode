@@ -1,6 +1,7 @@
 #include "common.h"
 #include "chunk.h"
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 
 #include <stdio.h>
@@ -46,13 +47,39 @@ static int longLocalVariableInstruction(const char* name, Chunk* chunk, int offs
     return offset + 2;
 }
 
+static int closureInstruction(Chunk* chunk, int offset) {
+    uint8_t constant = chunk->code[offset+1];
+    printf("%-21s 0x%04x '", "OP_CLOSURE", constant);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    ObjFunction* function = (ObjFunction*)chunk->constants.values[constant].as.obj;
+    for (int j=0; j < function->upvalueCount; j++) {
+        int isLocal = chunk->code[offset++];
+        int index = chunk->code[offset++];
+        printf("0x%04x    |                       %s %d\n", offset-2, isLocal ? "local" : "upvalue", index);
+    }
+    return offset + 2;
+}
+static int longClosureInstruction(Chunk* chunk, int offset) {
+    uint16_t constant = (uint16_t)chunk->code[offset+1] + ((uint16_t)chunk->code[offset+2] << 8);
+    printf("%-21s 0x%04x '", "OP_CLOSURE_LONG", constant);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    ObjFunction* function = (ObjFunction*)chunk->constants.values[constant].as.obj;
+    for (int j=0; j < function->upvalueCount; j++) {
+        int isLocal = chunk->code[offset++];
+        int index = chunk->code[offset++];
+        printf("0x%04x    |                       %s %d\n", offset-2, isLocal ? "local" : "upvalue", index);
+    }
+    return offset + 2;
+}
+
 void disassembleChunk(Chunk* chunk, const char* name) {
     printf("== %s ==\n", name);
     for (int offset = 0; offset < chunk->length;) {
         offset = disassembleInstruction(chunk, offset);
     }
 }
-
 int disassembleInstruction(Chunk* chunk, int offset) {
     printf("0x%04x ", offset);
     if (offset > 0 && chunk->lines[offset] == chunk->lines[offset-1]) {
@@ -130,6 +157,16 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return parameterInstruction("OP_CALL", chunk, offset);
         case OP_NOP:
             return simpleInstruction("OP_NOP", offset);
+        case OP_CLOSURE:
+            return closureInstruction(chunk, offset);
+        case OP_CLOSURE_LONG:
+            return longClosureInstruction(chunk, offset);
+        case OP_GET_UPVALUE:
+            return parameterInstruction("OP_GET_UPVALUE", chunk, offset);
+        case OP_SET_UPVALUE:
+            return parameterInstruction("OP_SET_UPVALUE", chunk, offset);
+        case OP_CLOSE_UPVALUE:
+            return simpleInstruction("OP_CLOSE_UPVALUE", offset);
         default:
             printf("Unknown opcode: 0x%x\n", instruction);
             return offset + 1;

@@ -76,6 +76,15 @@ void printObject(Obj* object) {
             printf("<native fn>");
             break;
         }
+        case OBJ_CLOSURE: {
+            printFunction(((ObjClosure*)object)->function);
+            break;
+        }
+        case OBJ_UPVALUE: {
+            printf("upvalue: ");
+            printValue(*((ObjUpvalue*)object)->location);
+            break;
+        }
     }
 }
 
@@ -89,10 +98,10 @@ bool objectsEqual(Obj* a, Obj* b) {
             char* bStr = ((ObjString*)b)->chars;
             return strcmp(aStr, bStr) == 0;
         }
+        case OBJ_NATIVE:
+        case OBJ_CLOSURE:
+        case OBJ_UPVALUE:
         case OBJ_FUNCTION: {
-            return a == b;
-        }
-        case OBJ_NATIVE: {
             return a == b;
         }
     }
@@ -131,6 +140,7 @@ ObjFunction* newFunction() {
     ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
     function->arity = 0;
     function->name = NULL;
+    function->upvalueCount = 0;
     initChunk(&function->chunk);
     return function;
 }
@@ -139,4 +149,23 @@ ObjNative* newNative(NativeFn function) {
     ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
     native->function = function;
     return native;
+}
+
+ObjClosure* newClosure(ObjFunction* function) {
+    ObjUpvalue** upvalues = (ObjUpvalue**)malloc(sizeof(ObjUpvalue*)*function->upvalueCount);
+    for (int i=0; i<function->upvalueCount; i++) {
+        upvalues[i] = NULL;
+    }
+    ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+    closure->function = function;
+    closure->upvalues = upvalues;
+    closure->upvalueCount = function->upvalueCount;
+    return closure;
+}
+ObjUpvalue* newUpvalue(Value* slot) {
+    ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+    upvalue->location = slot;
+    upvalue->next = NULL;
+    upvalue->closed = NIL_VAL();
+    return upvalue;
 }
