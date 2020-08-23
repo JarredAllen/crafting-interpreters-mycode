@@ -1,0 +1,25 @@
+// This script mostly measures how efficient our function calls are.
+
+// The first three lines should look like:
+// fibonacci(32):
+// 2.17831e+06
+// Time taken (seconds):
+
+// The last line indicates how long it took to run (typically about 0.8 seconds).
+
+fun fibonacci(n) {
+    if (n < 2) {
+        return n;
+    } else {
+        return fibonacci(n-1) + fibonacci(n-2);
+    }
+}
+
+var start = clock();
+var result = fibonacci(32);
+var duration = clock() - start;
+
+print "fibonacci(32):";
+print result;
+print "Time taken (seconds):";
+print duration;
