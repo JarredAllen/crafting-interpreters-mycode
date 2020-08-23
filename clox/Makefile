@@ -1,15 +1,17 @@
 CC=clang
 CC_FLAGS=-Wall -Wextra -Wpedantic -g -Og
 
-HEADERS=common.h chunk.h compiler.h debug.h lexer.h memory.h table.h object.h value.h vm.h
-OBJ=chunk.o compiler.o debug.o lexer.o main.o memory.o table.o object.o value.o vm.o
+ODIR=build
 
-main: $(OBJ)
+HEADERS=common.h chunk.h compiler.h debug.h lexer.h memory.h table.h object.h value.h vm.h
+_OBJ=chunk.o compiler.o debug.o lexer.o main.o memory.o table.o object.o value.o vm.o
+OBJ=$(patsubst %,$(ODIR)/%,$(_OBJ))
+
+clox: $(OBJ)
 	$(CC) -o clox $(OBJ)
 
-%.o: %.c $(HEADERS)
+$(ODIR)/%.o: %.c $(HEADERS)
 	$(CC) $(CC_FLAGS) -c -o $@ $<
 
 clean:
-	rm *.o
-	rm clox
+	rm $(ODIR)/*.o
