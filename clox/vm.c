@@ -109,6 +109,11 @@ static bool callValue(Value callee, int argCount) {
                 vm.stackTop[-argCount-1] = OBJ_VAL(newInstance(class));
                 return true;
             }
+            case OBJ_BOUND_METHOD: {
+                ObjBoundMethod* bound = (ObjBoundMethod*)callee.as.obj;
+                vm.stackTop[-argCount-1] = bound->receiver;
+                return call(bound->method, argCount);
+            }
             default:           break;
         }
     }
@@ -189,6 +194,17 @@ static void defineMethod(ObjString* name) {
     ObjClass* class = (ObjClass*)stackPeek(1).as.obj;
     tableSet(&class->methods, name, method);
     stackPop();
+}
+
+static bool bindMethod(ObjClass* class, ObjString* name) {
+    Value method;
+    if (!tableGet(&class->methods, name, &method)) {
+        return false;
+    }
+    ObjBoundMethod* bound = newBoundMethod(stackPeek(0), (ObjClosure*)method.as.obj);
+    stackPop();
+    stackPush(OBJ_VAL(bound));
+    return true;
 }
 
 // Define some aliases for common functions used in the run function
@@ -448,7 +464,8 @@ static InterpretResult run() {
                 if (tableGet(&instance->fields, name, &value)) {
                     stackPop();
                     stackPush(value);
-                } else {
+                } else if (!bindMethod(instance->class, name)) {
+                    // If it is a bound method, then the bindMethod function takes care of that
                     runtimeError("Undefined property '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }

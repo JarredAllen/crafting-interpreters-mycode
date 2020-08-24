@@ -28,6 +28,7 @@ typedef struct {
 
 typedef enum {
     TYPE_FUNCTION,
+    TYPE_METHOD,
     TYPE_SCRIPT,
 } FunctionType;
 
@@ -49,6 +50,12 @@ typedef struct {
     bool panicMode;
 } Parser;
 Parser parser;
+
+typedef struct ClassCompiler {
+    struct ClassCompiler* enclosing;
+    Token name;
+} ClassCompiler;
+ClassCompiler* currentClass = NULL;
 
 Chunk* targetChunk;
 
@@ -311,7 +318,7 @@ static void funDeclaration() {
 static void method() {
     consume(TOKEN_IDENTIFIER, "Expected method name");
     uint64_t constant = identifierConstant(&parser.previous);
-    FunctionType type = TYPE_FUNCTION;
+    FunctionType type = TYPE_METHOD;
     function(type);
     if (constant <= 0xFF) {
         emitByte(OP_METHOD);
@@ -343,6 +350,10 @@ static void classDeclaration() {
         exit(-1);
     }
     defineVariable(nameConstant);
+    ClassCompiler classCompiler;
+    classCompiler.name = parser.previous;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
     namedVariable(className, false);
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
     while(!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
@@ -350,6 +361,8 @@ static void classDeclaration() {
     }
     emitByte(OP_POP);
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    currentClass = currentClass->enclosing;
+    currentClass = currentClass->enclosing;
 }
 
 static void declaration() {
@@ -757,6 +770,14 @@ static void dot(bool canAssign) {
     }
 }
 
+static void this(__attribute__((unused)) bool canAssign) {
+    if (currentClass == NULL) {
+        error("Cannot use 'this' outside of a class.");
+        return;
+    }
+    variable(false);
+}
+
 ParseRule rules[] = {
     [TOKEN_LEFT_PAREN]    = { grouping, call,   PREC_CALL },
     [TOKEN_RIGHT_PAREN]   = { NULL,     NULL,   PREC_NONE },
@@ -792,7 +813,7 @@ ParseRule rules[] = {
     [TOKEN_PRINT]         = { NULL,     NULL,   PREC_NONE },
     [TOKEN_RETURN]        = { NULL,     NULL,   PREC_NONE },
     [TOKEN_SUPER]         = { NULL,     NULL,   PREC_NONE },
-    [TOKEN_THIS]          = { NULL,     NULL,   PREC_NONE },
+    [TOKEN_THIS]          = { this,     NULL,   PREC_NONE },
     [TOKEN_TRUE]          = { literal,  NULL,   PREC_NONE },
     [TOKEN_VAR]           = { NULL,     NULL,   PREC_NONE },
     [TOKEN_WHILE]         = { NULL,     NULL,   PREC_NONE },
@@ -832,17 +853,22 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     compiler->function = newFunction();
     compiler->locals = (Local*)malloc(sizeof(Local)*MAX_LOCALS);
     compiler->upvalues = (Upvalue*)malloc(sizeof(Upvalue)*MAX_UPVALUES);
-
-    // Stack slot 0 is reserved by the compiler for internal use. It
-    // stores the function currently being evaluated
     if (type != TYPE_SCRIPT) {
         currentCompiler->function->name = copyString(parser.previous.start, parser.previous.length);
     }
+    // Stack slot 0 is reserved by the compiler for internal use. It
+    // stores the function currently being evaluated, if in a function,
+    // or the receiver of the method call, if in a method call.
     Local* local = &currentCompiler->locals[currentCompiler->localCount++];
     local->depth = 0;
-    local->name.start = "";
-    local->name.length = 0;
     local->isCaptured = false;
+    if (type == TYPE_FUNCTION || type == TYPE_SCRIPT) {
+        local->name.start = "";
+        local->name.length = 0;
+    } else {
+        local->name.start = "this";
+        local->name.length = 4;
+    }
 }
 
 void markCompilerRoots() {

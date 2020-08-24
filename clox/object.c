@@ -94,6 +94,10 @@ void printObject(Obj* object) {
             printValue(*((ObjUpvalue*)object)->location);
             break;
         }
+        case OBJ_BOUND_METHOD: {
+            printFunction(((ObjBoundMethod*)object)->method->function);
+            break;
+        }
     }
 }
 
@@ -112,6 +116,7 @@ bool objectsEqual(Obj* a, Obj* b) {
         case OBJ_UPVALUE:
         case OBJ_CLASS:
         case OBJ_INSTANCE:
+        case OBJ_BOUND_METHOD:
         case OBJ_FUNCTION: {
             return a == b;
         }
@@ -191,4 +196,10 @@ ObjInstance* newInstance(ObjClass* class) {
     instance->class = class;
     initTable(&instance->fields);
     return instance;
+}
+ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method) {
+    ObjBoundMethod* bound = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD);
+    bound->receiver = receiver;
+    bound->method = method;
+    return bound;
 }
