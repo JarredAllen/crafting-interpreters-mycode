@@ -36,12 +36,16 @@ void initVM() {
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
 
+    vm.initString = NULL;
+    vm.initString = copyString("init", 4);
+
     defineNative("clock", clockNative);
 }
 
 void freeVM() {
     freeTable(&vm.strings);
     freeTable(&vm.globals);
+    vm.initString = NULL;
     freeObjects();
     free(vm.grayStack);
 }
@@ -107,7 +111,15 @@ static bool callValue(Value callee, int argCount) {
             case OBJ_CLASS: {
                 ObjClass* class = (ObjClass*)callee.as.obj;
                 vm.stackTop[-argCount-1] = OBJ_VAL(newInstance(class));
-                return true;
+                Value initializer;
+                if (tableGet(&class->methods, vm.initString, &initializer)) {
+                    return call((ObjClosure*)initializer.as.obj, argCount);
+                } else if (argCount != 0) {
+                    runtimeError("Expected 0 arguments but got %d.", argCount);
+                    return false;
+                } else {
+                    return true;
+                }
             }
             case OBJ_BOUND_METHOD: {
                 ObjBoundMethod* bound = (ObjBoundMethod*)callee.as.obj;
@@ -205,6 +217,30 @@ static bool bindMethod(ObjClass* class, ObjString* name) {
     stackPop();
     stackPush(OBJ_VAL(bound));
     return true;
+}
+
+static bool invokeFromClass(ObjClass* class, ObjString* name, int argCount) {
+    Value method;
+    if (!tableGet(&class->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+    return call((ObjClosure*)method.as.obj, argCount);
+}
+
+static bool invoke(ObjString* name, int argCount) {
+    Value receiver = stackPeek(argCount);
+    if (!IS_INSTANCE(receiver)) {
+        runtimeError("Only instances have methods.");
+        return false;
+    }
+    ObjInstance* instance = (ObjInstance*)receiver.as.obj;
+    Value value;
+    if (tableGet(&instance->fields, name, &value)) {
+        vm.stackTop[-argCount-1] = value;
+        return callValue(value, argCount);
+    }
+    return invokeFromClass(instance->class, name, argCount);
 }
 
 // Define some aliases for common functions used in the run function
@@ -516,6 +552,19 @@ static InterpretResult run() {
             }
             case OP_METHOD: {
                 defineMethod((ObjString*)READ_CONSTANT().as.obj);
+                break;
+            }
+            case OP_METHOD_LONG: {
+                defineMethod((ObjString*)READ_CONSTANT_LONG().as.obj);
+                break;
+            }
+            case OP_INVOKE: {
+                ObjString* method = (ObjString*)READ_CONSTANT().as.obj;
+                int argCount = READ_BYTE();
+                if (!invoke(method, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm.frames[vm.frameCount-1];
                 break;
             }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;

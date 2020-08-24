@@ -117,6 +117,7 @@ static void markRoots() {
     }
     markTable(&vm.globals);
     markTable(&vm.strings);
+    markObject((Obj*)vm.initString);
     // Mark any open upvalues (closed ones are caught inductively from the stack)
     for (ObjUpvalue* upvalue = vm.openUpvalues; upvalue != NULL; upvalue = (ObjUpvalue*)upvalue->next) {
         markObject((Obj*)upvalue);

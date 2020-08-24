@@ -74,6 +74,23 @@ static int longClosureInstruction(Chunk* chunk, int offset) {
     return offset + 2;
 }
 
+static int invokeInstruction(char* name, Chunk* chunk, int offset) {
+    uint8_t constant = chunk->code[offset+1];
+    uint8_t argCount = chunk->code[offset+2];
+    printf("%-21s 0x%04x (%d args) '", name, constant, argCount);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    return offset + 3;
+}
+static int longInvokeInstruction(char* name, Chunk* chunk, int offset) {
+    uint16_t constant = (uint16_t)chunk->code[offset+1] + ((uint16_t)chunk->code[offset+2] << 8);
+    uint8_t argCount = chunk->code[offset+3];
+    printf("%-21s 0x%04x (%d args) '", name, constant, argCount);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    return offset + 4;
+}
+
 void disassembleChunk(Chunk* chunk, const char* name) {
     printf("== %s ==\n", name);
     for (int offset = 0; offset < chunk->length;) {
@@ -183,6 +200,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return constantInstruction("OP_METHOD", chunk, offset);
         case OP_METHOD_LONG:
             return constantInstruction("OP_METHOD_LONG", chunk, offset);
+        case OP_INVOKE:
+            return invokeInstruction("OP_INVOKE", chunk, offset);
+        case OP_INVOKE_LONG:
+            return longInvokeInstruction("OP_INVOKE_LONG", chunk, offset);
         default:
             printf("Unknown opcode: 0x%x\n", instruction);
             return offset + 1;

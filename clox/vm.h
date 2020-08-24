@@ -23,6 +23,7 @@ typedef struct {
     Table strings;
     Obj* objects;
     ObjUpvalue* openUpvalues;
+    ObjString* initString;
     Value stack[STACK_MAX];
     size_t bytesAllocated;
     size_t nextGC;

@@ -66,6 +66,8 @@ typedef enum {
     OP_GET_PROPERTY_LONG,
     OP_SET_PROPERTY,
     OP_SET_PROPERTY_LONG,
+    OP_INVOKE,
+    OP_INVOKE_LONG,
 } OpCode;
 
 typedef struct {

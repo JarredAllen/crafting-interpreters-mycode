@@ -30,6 +30,7 @@ typedef enum {
     TYPE_FUNCTION,
     TYPE_METHOD,
     TYPE_SCRIPT,
+    TYPE_INITIALIZER,
 } FunctionType;
 
 typedef struct Compiler {
@@ -319,6 +320,9 @@ static void method() {
     consume(TOKEN_IDENTIFIER, "Expected method name");
     uint64_t constant = identifierConstant(&parser.previous);
     FunctionType type = TYPE_METHOD;
+    if (parser.previous.length == 4 && memcmp(parser.previous.start, "init", 4) == 0) {
+        type = TYPE_INITIALIZER;
+    }
     function(type);
     if (constant <= 0xFF) {
         emitByte(OP_METHOD);
@@ -362,7 +366,6 @@ static void classDeclaration() {
     emitByte(OP_POP);
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
     currentClass = currentClass->enclosing;
-    currentClass = currentClass->enclosing;
 }
 
 static void declaration() {
@@ -389,6 +392,9 @@ static void printStatement() {
 static void returnStatement() {
     if (currentCompiler->type == TYPE_SCRIPT) {
         error("Cannot return outside of function/method");
+    }
+    if (currentCompiler->type == TYPE_INITIALIZER) {
+        error("Cannot return from an initializer");
     }
     if (check(TOKEN_SEMICOLON)) {
         emitByte(OP_NIL);
@@ -751,19 +757,33 @@ static void dot(bool canAssign) {
         if (canAssign && match(TOKEN_EQUAL)) {
             expression();
             emitByte(OP_SET_PROPERTY);
+            emitByte(name);
+        } else if (match(TOKEN_LEFT_PAREN)) {
+            uint8_t argCount = argumentList();
+            emitByte(OP_INVOKE);
+            emitByte(name);
+            emitByte(argCount);
         } else {
             emitByte(OP_GET_PROPERTY);
+            emitByte(name);
         }
-        emitByte(name);
     } else if (name <= 0xFFFF) {
         if (canAssign && match(TOKEN_EQUAL)) {
             expression();
             emitByte(OP_SET_PROPERTY_LONG);
+            emitByte(name & 0xFF);
+            emitByte((name >> 8) & 0xFF);
+        } else if (match(TOKEN_LEFT_PAREN)) {
+            uint8_t argCount = argumentList();
+            emitByte(OP_INVOKE_LONG);
+            emitByte(name & 0xFF);
+            emitByte((name >> 8) & 0xFF);
+            emitByte(argCount);
         } else {
             emitByte(OP_GET_PROPERTY_LONG);
+            emitByte(name & 0xFF);
+            emitByte((name >> 8) & 0xFF);
         }
-        emitByte(name & 0xFF);
-        emitByte((name >> 8) & 0xFF);
     } else {
         fprintf(stderr, "Field names must be in the first 65536 constants");
         exit(-1);
@@ -825,7 +845,12 @@ static ParseRule* getRule(TokenType type) {
 }
 
 static ObjFunction* endCompiler() {
-    emitByte(OP_NIL);
+    if (currentCompiler->type == TYPE_INITIALIZER) {
+        emitByte(OP_GET_LOCAL);
+        emitByte(0);
+    } else {
+        emitByte(OP_NIL);
+    }
     emitByte(OP_RETURN);
     ObjFunction* function = currentCompiler->function;
 #ifdef DEBUG_PRINT_CODE
