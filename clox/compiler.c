@@ -315,6 +315,13 @@ static void classDeclaration() {
     if (nameConstant < 0xFF) {
         emitByte(OP_CLASS);
         emitByte(nameConstant);
+    } else if (nameConstant < 0xFFFF) {
+        emitByte(OP_CLASS_LONG);
+        emitByte(nameConstant & 0xFF);
+        emitByte((nameConstant >> 8) & 0xFF);
+    } else {
+        fprintf(stderr, "Cannot have a class after 65536 other constants");
+        exit(-1);
     }
     defineVariable(nameConstant);
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
@@ -700,6 +707,31 @@ static void call(__attribute__((unused))bool canAssign) {
     emitByte(OP_CALL);
     emitByte(argCount);
 }
+static void dot(bool canAssign) {
+    consume(TOKEN_IDENTIFIER, "Expected propery name after '.'");
+    uint64_t name = identifierConstant(&parser.previous);
+    if (name <= 0xFF) {
+        if (canAssign && match(TOKEN_EQUAL)) {
+            expression();
+            emitByte(OP_SET_PROPERTY);
+        } else {
+            emitByte(OP_GET_PROPERTY);
+        }
+        emitByte(name);
+    } else if (name <= 0xFFFF) {
+        if (canAssign && match(TOKEN_EQUAL)) {
+            expression();
+            emitByte(OP_SET_PROPERTY_LONG);
+        } else {
+            emitByte(OP_GET_PROPERTY_LONG);
+        }
+        emitByte(name & 0xFF);
+        emitByte((name >> 8) & 0xFF);
+    } else {
+        fprintf(stderr, "Field names must be in the first 65536 constants");
+        exit(-1);
+    }
+}
 
 ParseRule rules[] = {
     [TOKEN_LEFT_PAREN]    = { grouping, call,   PREC_CALL },
@@ -707,7 +739,7 @@ ParseRule rules[] = {
     [TOKEN_LEFT_BRACE]    = { NULL,     NULL,   PREC_NONE }, 
     [TOKEN_RIGHT_BRACE]   = { NULL,     NULL,   PREC_NONE },
     [TOKEN_COMMA]         = { NULL,     NULL,   PREC_NONE },
-    [TOKEN_DOT]           = { NULL,     NULL,   PREC_NONE },
+    [TOKEN_DOT]           = { NULL,     dot,    PREC_CALL },
     [TOKEN_MINUS]         = { unary,    binary, PREC_TERM },
     [TOKEN_PLUS]          = { NULL,     binary, PREC_TERM },
     [TOKEN_SEMICOLON]     = { NULL,     NULL,   PREC_NONE },

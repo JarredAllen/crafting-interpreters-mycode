@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 typedef enum {
@@ -12,6 +13,7 @@ typedef enum {
     OBJ_CLOSURE,
     OBJ_UPVALUE,
     OBJ_CLASS,
+    OBJ_INSTANCE,
 } ObjType;
 
 struct sObj {
@@ -47,6 +49,12 @@ typedef struct {
     ObjString* name;
 } ObjClass;
 
+typedef struct {
+    Obj obj;
+    ObjClass* class;
+    Table fields;
+} ObjInstance;
+
 typedef Value (*NativeFn)(int argCount, Value* args);
 typedef struct {
     Obj obj;
@@ -67,6 +75,7 @@ ObjNative* newNative(NativeFn);
 ObjClosure* newClosure(ObjFunction*);
 ObjUpvalue* newUpvalue(Value* slot);
 ObjClass* newClass(ObjString* name);
+ObjInstance* newInstance(ObjClass* class);
 
 #define OBJ_TYPE(value) (value.as.obj->type)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
@@ -75,6 +84,7 @@ ObjClass* newClass(ObjString* name);
 #define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_UPVALUE(value) isObjType(value, OBJ_UPVALUE)
 #define IS_CLASS(value) isObjType(value, OBJ_CLASS)
+#define IS_INSTANCE(value) isObjType(value, OBJ_INSTANCE)
 static inline bool isObjType(Value value, ObjType type) {
     return IS_OBJ(value) && value.as.obj->type == type;
 }

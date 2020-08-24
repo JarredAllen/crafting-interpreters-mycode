@@ -59,6 +59,11 @@ typedef enum {
     OP_CLOSE_UPVALUE,
     // OOP Stuff
     OP_CLASS,
+    OP_CLASS_LONG,
+    OP_GET_PROPERTY,
+    OP_GET_PROPERTY_LONG,
+    OP_SET_PROPERTY,
+    OP_SET_PROPERTY_LONG,
 } OpCode;
 
 typedef struct {

@@ -104,6 +104,11 @@ static bool callValue(Value callee, int argCount) {
                 stackPush(result);
                 return true;
             }
+            case OBJ_CLASS: {
+                ObjClass* class = (ObjClass*)callee.as.obj;
+                vm.stackTop[-argCount-1] = OBJ_VAL(newInstance(class));
+                return true;
+            }
             default:           break;
         }
     }
@@ -419,6 +424,70 @@ static InterpretResult run() {
             }
             case OP_CLASS: {
                 stackPush(OBJ_VAL(newClass((ObjString*)READ_CONSTANT().as.obj)));
+                break;
+            }
+            case OP_CLASS_LONG: {
+                stackPush(OBJ_VAL(newClass((ObjString*)READ_CONSTANT_LONG().as.obj)));
+                break;
+            }
+            case OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(stackPeek(0))) {
+                    runtimeError("Only instances have properties");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*)stackPeek(0).as.obj;
+                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
+                Value value;
+                if (tableGet(&instance->fields, name, &value)) {
+                    stackPop();
+                    stackPush(value);
+                } else {
+                    runtimeError("Undefined property '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_GET_PROPERTY_LONG: {
+                if (!IS_INSTANCE(stackPeek(0))) {
+                    runtimeError("Only instances have properties");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*)stackPeek(0).as.obj;
+                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                Value value;
+                if (tableGet(&instance->fields, name, &value)) {
+                    stackPop();
+                    stackPush(value);
+                } else {
+                    runtimeError("Undefined property '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(stackPeek(1))) {
+                    runtimeError("Only instances have properties");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*)stackPeek(1).as.obj;
+                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
+                Value value = stackPop();
+                tableSet(&instance->fields, name, value);
+                stackPop();
+                stackPush(value);
+                break;
+            }
+            case OP_SET_PROPERTY_LONG: {
+                if (!IS_INSTANCE(stackPeek(1))) {
+                    runtimeError("Only instances have properties");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*)stackPeek(1).as.obj;
+                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                Value value = stackPop();
+                tableSet(&instance->fields, name, value);
+                stackPop();
+                stackPush(value);
                 break;
             }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;

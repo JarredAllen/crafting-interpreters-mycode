@@ -77,6 +77,10 @@ void printObject(Obj* object) {
             printf("%s", ((ObjClass*)object)->name->chars);
             break;
         }
+        case OBJ_INSTANCE: {
+            printf("%s instance", ((ObjClass*)((ObjInstance*)object)->class)->name->chars);
+            break;
+        }
         case OBJ_NATIVE: {
             printf("<native fn>");
             break;
@@ -107,6 +111,7 @@ bool objectsEqual(Obj* a, Obj* b) {
         case OBJ_CLOSURE:
         case OBJ_UPVALUE:
         case OBJ_CLASS:
+        case OBJ_INSTANCE:
         case OBJ_FUNCTION: {
             return a == b;
         }
@@ -179,4 +184,10 @@ ObjClass* newClass(ObjString* name) {
     ObjClass* class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
     class->name = name;
     return class;
+}
+ObjInstance* newInstance(ObjClass* class) {
+    ObjInstance* instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
+    instance->class = class;
+    initTable(&instance->fields);
+    return instance;
 }
