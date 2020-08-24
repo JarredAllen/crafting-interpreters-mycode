@@ -308,8 +308,27 @@ static void funDeclaration() {
     defineVariable(global);
 }
 
+static void method() {
+    consume(TOKEN_IDENTIFIER, "Expected method name");
+    uint64_t constant = identifierConstant(&parser.previous);
+    FunctionType type = TYPE_FUNCTION;
+    function(type);
+    if (constant <= 0xFF) {
+        emitByte(OP_METHOD);
+        emitByte(constant);
+    } else if (constant <= 0xFFFF) {
+        emitByte(OP_METHOD_LONG);
+        emitByte(constant & 0xFF);
+        emitByte((constant >> 8) & 0xFF);
+    } else {
+        fprintf(stderr, "Cannot have method be after 65536 constants.\n");
+        exit(-1);
+    }
+}
+static void namedVariable(Token name, bool canAssign);
 static void classDeclaration() {
     consume(TOKEN_IDENTIFIER, "Expected name of class");
+    Token className = parser.previous;
     uint64_t nameConstant = identifierConstant(&parser.previous);
     declareVariable();
     if (nameConstant < 0xFF) {
@@ -324,7 +343,12 @@ static void classDeclaration() {
         exit(-1);
     }
     defineVariable(nameConstant);
+    namedVariable(className, false);
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    while(!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        method();
+    }
+    emitByte(OP_POP);
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
 }
 

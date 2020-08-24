@@ -184,6 +184,13 @@ static void closeUpvalues(Value* last) {
     }
 }
 
+static void defineMethod(ObjString* name) {
+    Value method = stackPeek(0);
+    ObjClass* class = (ObjClass*)stackPeek(1).as.obj;
+    tableSet(&class->methods, name, method);
+    stackPop();
+}
+
 // Define some aliases for common functions used in the run function
 #define READ_BYTE() (*frame->ip++)
 #define READ_TWO_BYTES() ((uint16_t)READ_BYTE() + (uint16_t)(READ_BYTE() << 8))
@@ -488,6 +495,10 @@ static InterpretResult run() {
                 tableSet(&instance->fields, name, value);
                 stackPop();
                 stackPush(value);
+                break;
+            }
+            case OP_METHOD: {
+                defineMethod((ObjString*)READ_CONSTANT().as.obj);
                 break;
             }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
