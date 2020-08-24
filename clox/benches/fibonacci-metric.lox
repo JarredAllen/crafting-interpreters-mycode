@@ -17,10 +17,10 @@ fun fibonacci(n) {
 }
 
 var start = clock();
-var result = fibonacci(32);
+var result = fibonacci(35);
 var duration = clock() - start;
 
-print "fibonacci(32):";
+print "fibonacci(35):";
 print result;
 print "Time taken (seconds):";
 print duration;

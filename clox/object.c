@@ -121,6 +121,7 @@ bool objectsEqual(Obj* a, Obj* b) {
             return a == b;
         }
     }
+    return false;
 }
 
 ObjString* takeString(char* chars, int length) {

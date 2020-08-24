@@ -78,6 +78,8 @@ static void skipWhitespace() {
         switch (PEEK()) {
             case '\n':
                 lexer.line++;
+                ADVANCE();
+                break;
             case ' ':
             case '\t':
             case '\r':

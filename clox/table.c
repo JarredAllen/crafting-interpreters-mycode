@@ -81,10 +81,12 @@ bool tableDelete(Table* table, ObjString* key) {
 
 // Warning: this function is unsafe if capacity is zero or if entries is null
 static Entry* findEntry(Entry* entries, uint capacity, ObjString* key) {
-    uint32_t startIndex = key->hash % capacity;
+    uint32_t startIndex = key->hash & (capacity-1);
+    // Valid optimization of the next line, because the capacity is always a power of two
+    // uint32_t startIndex = key->hash % capacity;
     Entry* tombstone = NULL;
     for (uint32_t offset = 0;; offset++) {
-        Entry* entry = entries + (startIndex + offset*offset) % capacity;
+        Entry* entry = entries + ((startIndex + offset*offset) & (capacity-1));
         if (entry->key == NULL) {
             if (IS_NIL(entry->value)) {
                 // Actually empty entry

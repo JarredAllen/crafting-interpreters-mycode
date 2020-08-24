@@ -1,5 +1,5 @@
-CC=clang
-CC_FLAGS=-Wall -Wextra -Wpedantic -g -Og
+CC=gcc
+CC_FLAGS=-Wall -Wextra -Wpedantic -g -O2 -pg
 
 ODIR=build
 
@@ -8,7 +8,7 @@ _OBJ=chunk.o compiler.o debug.o lexer.o main.o memory.o table.o object.o value.o
 OBJ=$(patsubst %,$(ODIR)/%,$(_OBJ))
 
 clox: $(OBJ)
-	$(CC) -o clox $(OBJ)
+	$(CC) $(CC_FLAGS) -o clox $(OBJ)
 
 $(ODIR)/%.o: %.c $(HEADERS)
 	$(CC) $(CC_FLAGS) -c -o $@ $<

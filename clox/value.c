@@ -44,6 +44,7 @@ bool truthy(Value value) {
         case VAL_OBJ:   
             return true;
     }
+    return false;
 }
 
 bool valuesEqual(Value a, Value b) {
@@ -57,4 +58,5 @@ bool valuesEqual(Value a, Value b) {
         case VAL_INTEGER: return a.as.integer == b.as.integer;
         case VAL_OBJ:    return a.as.obj == b.as.obj;
     }
+    return false;
 }
