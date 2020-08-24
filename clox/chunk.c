@@ -32,7 +32,11 @@ void freeChunk(Chunk* chunk) {
     free(chunk->lines);
     freeValueArray(&chunk->constants);
     freeTable(&chunk->stringConstants);
-    initChunk(chunk);
+    chunk->length = 0;
+    chunk->capacity = 0;
+    chunk->code = NULL;
+    chunk->lines = NULL;
+    initValueArray(&chunk->constants);
 }
 
 uint64_t addConstant(Chunk*chunk, Value value) {

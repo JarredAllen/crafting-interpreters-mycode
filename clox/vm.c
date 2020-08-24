@@ -28,6 +28,14 @@ void initVM() {
     initTable(&vm.strings);
     initTable(&vm.globals);
     vm.objects = NULL;
+
+    vm.bytesAllocated = 0;
+    // Default to not running GC until 16MB are allocated
+    vm.nextGC = 1 << 20;
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
+
     defineNative("clock", clockNative);
 }
 
@@ -35,6 +43,7 @@ void freeVM() {
     freeTable(&vm.strings);
     freeTable(&vm.globals);
     freeObjects();
+    free(vm.grayStack);
 }
 
 static void runtimeError(const char* format, ...);
@@ -114,7 +123,9 @@ InterpretResult interpret(const char* source) {
     stackPop();
     stackPush(OBJ_VAL(closure));
     callValue(OBJ_VAL(closure), 0);
-    return run();
+    InterpretResult result = run();
+    collectGarbage();
+    return result;
 }
 
 static void runtimeError(const char* format, ...) {
@@ -143,18 +154,18 @@ static ObjUpvalue* captureUpvalue(Value* local) {
     ObjUpvalue* upvalue = vm.openUpvalues;
     while (upvalue != NULL && upvalue->location > local) {
         prevUpvalue = upvalue;
-        upvalue = upvalue->next;
+        upvalue = (ObjUpvalue*)upvalue->next;
     }
     if (upvalue != NULL && upvalue->location == local) {
         return upvalue;
     }
     // Create it if it hasn't been created already
     ObjUpvalue* createdUpvalue = newUpvalue(local);
-    createdUpvalue->next = upvalue;
+    createdUpvalue->next = (struct ObjUpvalue*)upvalue;
     if (prevUpvalue == NULL) {
         vm.openUpvalues = createdUpvalue;
     } else {
-        prevUpvalue->next = createdUpvalue;
+        prevUpvalue->next = (struct ObjUpvalue*)createdUpvalue;
     }
     return createdUpvalue;
 }
@@ -164,7 +175,7 @@ static void closeUpvalues(Value* last) {
         ObjUpvalue* upvalue = vm.openUpvalues;
         upvalue->closed = *upvalue->location;
         upvalue->location = &upvalue->closed;
-        vm.openUpvalues = upvalue->next;
+        vm.openUpvalues = (ObjUpvalue*)upvalue->next;
     }
 }
 
@@ -245,14 +256,16 @@ static InterpretResult run() {
             }
             case OP_ADD: {
                 if (IS_STRING(stackPeek(0)) && IS_STRING(stackPeek(1))) {
-                    ObjString* b = AS_STRING(stackPop());
-                    ObjString* a = AS_STRING(stackPop());
+                    ObjString* b = AS_STRING(stackPeek(0));
+                    ObjString* a = AS_STRING(stackPeek(1));
                     int length = a->length + b->length;
                     char* chars = ALLOCATE(char, length+1);
                     memcpy(chars, a->chars, a->length);
                     memcpy(chars+a->length, b->chars, b->length);
                     chars[length] = '\0';
                     ObjString* result = takeString(chars, length);
+                    stackPop();
+                    stackPop();
                     stackPush(OBJ_VAL(result));
                 } else if (IS_NUMBER(stackPeek(0))  && IS_NUMBER(stackPeek(1))) {
                     Value b = stackPop();
@@ -404,11 +417,15 @@ static InterpretResult run() {
                 stackPop();
                 break;
             }
+            case OP_CLASS: {
+                stackPush(OBJ_VAL(newClass((ObjString*)READ_CONSTANT().as.obj)));
+                break;
+            }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }
 }
-// Undefine them to be a good C programmer
+// Undefine macros to be a good C programmer
 #undef BINARY_OP
 #undef READ_CONSTANT_LONG
 #undef READ_CONSTANT

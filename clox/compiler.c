@@ -2,6 +2,7 @@
 #include "chunk.h"
 #include "compiler.h"
 #include "lexer.h"
+#include "memory.h"
 #include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -307,11 +308,26 @@ static void funDeclaration() {
     defineVariable(global);
 }
 
+static void classDeclaration() {
+    consume(TOKEN_IDENTIFIER, "Expected name of class");
+    uint64_t nameConstant = identifierConstant(&parser.previous);
+    declareVariable();
+    if (nameConstant < 0xFF) {
+        emitByte(OP_CLASS);
+        emitByte(nameConstant);
+    }
+    defineVariable(nameConstant);
+    consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+}
+
 static void declaration() {
     if (match(TOKEN_VAR)) {
         varDeclaration();
     } else if (match(TOKEN_FUN)) {
         funDeclaration();
+    } else if (match(TOKEN_CLASS)) {
+        classDeclaration();
     } else {
         statement();
     }
@@ -752,6 +768,7 @@ static void initParser() {
 
 static void initCompiler(Compiler* compiler, FunctionType type) {
     compiler->enclosing = currentCompiler;
+    currentCompiler = compiler;
     compiler->function = NULL;
     compiler->type = type;
     compiler->localCount = 0;
@@ -759,7 +776,6 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     compiler->function = newFunction();
     compiler->locals = (Local*)malloc(sizeof(Local)*MAX_LOCALS);
     compiler->upvalues = (Upvalue*)malloc(sizeof(Upvalue)*MAX_UPVALUES);
-    currentCompiler = compiler;
 
     // Stack slot 0 is reserved by the compiler for internal use. It
     // stores the function currently being evaluated
@@ -771,4 +787,12 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     local->name.start = "";
     local->name.length = 0;
     local->isCaptured = false;
+}
+
+void markCompilerRoots() {
+    Compiler* compiler = currentCompiler;
+    while (compiler != NULL) {
+        markObject((Obj*)compiler->function);
+        compiler = compiler->enclosing;
+    }
 }

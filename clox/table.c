@@ -6,27 +6,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+static Entry* findEntry(Entry* enties, uint capacity, ObjString* key);
+static void adjustCapacity(Table* table, uint capacity);
+
 void initTable(Table* table) {
+    table->count = 0;
+    table->capacity = 8;
+    table->entries = (Entry*)malloc(sizeof(Entry)*table->capacity);
+    for (uint i=0; i < table->capacity; i++) {
+        table->entries[i].key = NULL;
+        table->entries[i].value = NIL_VAL();
+    }
+}
+void freeTable(Table* table) {
+    if (table->entries) {
+        free(table->entries);
+    }
     table->count = 0;
     table->capacity = 0;
     table->entries = NULL;
 }
-void freeTable(Table* table) {
-    if (table->entries != NULL) {
-        free(table->entries);
-    }
-    initTable(table);
-}
-
-static Entry* findEntry(Entry* enties, uint capacity, ObjString* key);
-static void adjustCapacity(Table* table, uint capacity);
 
 #define TABLE_MAX_LOAD 0.3
 bool tableSet(Table* table, ObjString* key, Value value) {
-    if (table->count+1 > table->capacity * TABLE_MAX_LOAD) {
-        int capacity = GROW_CAPACITY(table->capacity);
-        adjustCapacity(table, capacity);
-    }
     Entry* entry = findEntry(table->entries, table->capacity, key);
     bool isNewKey = (entry->key == NULL);
     if (isNewKey) {
@@ -34,6 +36,10 @@ bool tableSet(Table* table, ObjString* key, Value value) {
     }
     entry->key = key;
     entry->value = value;
+    if (table->count > table->capacity * TABLE_MAX_LOAD) {
+        int capacity = GROW_CAPACITY(table->capacity);
+        adjustCapacity(table, capacity);
+    }
     return isNewKey;
 }
 
@@ -122,4 +128,13 @@ static void adjustCapacity(Table* table, uint capacity) {
     free(table->entries);
     table->entries = newEntries;
     table->capacity = capacity;
+}
+
+void tableRemoveWhite(Table* table) {
+    for (uint i=0; i < table->capacity; i++) {
+        Entry* entry = &table->entries[i];
+        if (entry->key && !entry->key->obj.isMarked) {
+            tableDelete(table, entry->key);
+        }
+    }
 }

@@ -11,8 +11,11 @@
 #define GROW_ARRAY(type, pointer, oldCount, newCount) \
     (type*)realloc(pointer, sizeof(type) * (newCount))
 
-#define ALLOCATE(type, count) ((type*)malloc(sizeof(type)*count))
+#define ALLOCATE(type, count) ((type*)allocate(sizeof(type)*count))
 
 void freeObjects();
+void markObject();
+void collectGarbage();
 
+void* allocate(int bytes);
 #endif

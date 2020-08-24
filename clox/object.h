@@ -11,11 +11,13 @@ typedef enum {
     OBJ_NATIVE,
     OBJ_CLOSURE,
     OBJ_UPVALUE,
+    OBJ_CLASS,
 } ObjType;
 
 struct sObj {
-  ObjType type;
   struct sObj* next;
+  ObjType type;
+  bool isMarked;
 };
 
 typedef struct {
@@ -40,6 +42,11 @@ typedef struct {
     int upvalueCount;
 } ObjClosure;
 
+typedef struct {
+    Obj obj;
+    ObjString* name;
+} ObjClass;
+
 typedef Value (*NativeFn)(int argCount, Value* args);
 typedef struct {
     Obj obj;
@@ -59,6 +66,7 @@ ObjFunction* newFunction();
 ObjNative* newNative(NativeFn);
 ObjClosure* newClosure(ObjFunction*);
 ObjUpvalue* newUpvalue(Value* slot);
+ObjClass* newClass(ObjString* name);
 
 #define OBJ_TYPE(value) (value.as.obj->type)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
@@ -66,6 +74,7 @@ ObjUpvalue* newUpvalue(Value* slot);
 #define IS_NATIVE(value) isObjType(value, OBJ_NATIVE)
 #define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_UPVALUE(value) isObjType(value, OBJ_UPVALUE)
+#define IS_CLASS(value) isObjType(value, OBJ_CLASS)
 static inline bool isObjType(Value value, ObjType type) {
     return IS_OBJ(value) && value.as.obj->type == type;
 }

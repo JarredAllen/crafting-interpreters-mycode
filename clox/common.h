@@ -9,5 +9,7 @@
 // #define DEBUG_TRACE_EXECUTION
 // #define DEBUG_STRING_INTERNING
 #define DEBUG_RUNTIME_CHECKS
+// #define DEBUG_STRESS_GC
+// #define DEBUG_LOG_GC
 
 #endif

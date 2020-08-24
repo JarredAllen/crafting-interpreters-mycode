@@ -24,5 +24,6 @@ void copyTable(Table* from, Table* to);
 bool tableGet(Table* table, ObjString* key, Value* value);
 
 bool tableDelete(Table* table, ObjString* key);
+void tableRemoveWhite(Table* table);
 
 #endif

@@ -24,6 +24,11 @@ typedef struct {
     Obj* objects;
     ObjUpvalue* openUpvalues;
     Value stack[STACK_MAX];
+    size_t bytesAllocated;
+    size_t nextGC;
+    int grayCount;
+    int grayCapacity;
+    Obj** grayStack;
 } VM;
 
 void initVM();

@@ -8,9 +8,10 @@
 
 #define ALLOCATE_OBJ(type, objectType) (type*)allocateObject(sizeof(type), objectType)
 static Obj* allocateObject(size_t size, ObjType type) {
-    Obj* object = (Obj*)malloc(size);
+    Obj* object = (Obj*)ALLOCATE(uint8_t, size);
     object->type = type;
     object->next = vm.objects;
+    object->isMarked = false;
     vm.objects = object;
     return object;
 }
@@ -25,6 +26,7 @@ static uint32_t hashString(const char* string, int length) {
 }
 
 static ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t hash);
+
 ObjString* allocateString(char* chars, int length, uint32_t hash) {
     ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
     if (interned != NULL) {
@@ -38,7 +40,6 @@ ObjString* allocateString(char* chars, int length, uint32_t hash) {
     string->length = length;
     string->chars = chars;
     string->hash = hash;
-
 #ifdef DEBUG_STRING_INTERNING
     printf("Made new string \"%s\"\n", chars);
 #endif
@@ -72,6 +73,10 @@ void printObject(Obj* object) {
             printFunction((ObjFunction*)object);
             break;
         }
+        case OBJ_CLASS: {
+            printf("%s", ((ObjClass*)object)->name->chars);
+            break;
+        }
         case OBJ_NATIVE: {
             printf("<native fn>");
             break;
@@ -101,6 +106,7 @@ bool objectsEqual(Obj* a, Obj* b) {
         case OBJ_NATIVE:
         case OBJ_CLOSURE:
         case OBJ_UPVALUE:
+        case OBJ_CLASS:
         case OBJ_FUNCTION: {
             return a == b;
         }
@@ -152,7 +158,7 @@ ObjNative* newNative(NativeFn function) {
 }
 
 ObjClosure* newClosure(ObjFunction* function) {
-    ObjUpvalue** upvalues = (ObjUpvalue**)malloc(sizeof(ObjUpvalue*)*function->upvalueCount);
+    ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
     for (int i=0; i<function->upvalueCount; i++) {
         upvalues[i] = NULL;
     }
@@ -168,4 +174,9 @@ ObjUpvalue* newUpvalue(Value* slot) {
     upvalue->next = NULL;
     upvalue->closed = NIL_VAL();
     return upvalue;
+}
+ObjClass* newClass(ObjString* name) {
+    ObjClass* class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
+    class->name = name;
+    return class;
 }
