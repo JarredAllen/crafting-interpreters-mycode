@@ -204,6 +204,16 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return invokeInstruction("OP_INVOKE", chunk, offset);
         case OP_INVOKE_LONG:
             return longInvokeInstruction("OP_INVOKE_LONG", chunk, offset);
+        case OP_INHERIT:
+            return simpleInstruction("OP_INHERIT", offset);
+        case OP_GET_SUPER:
+            return constantInstruction("OP_GET_SUPER", chunk, offset);
+        case OP_GET_SUPER_LONG:
+            return longConstantInstruction("OP_GET_SUPER_LONG", chunk, offset);
+        case OP_SUPER_INVOKE:
+            return invokeInstruction("OP_SUPER_INVOKE", chunk, offset);
+        case OP_SUPER_INVOKE_LONG:
+            return longInvokeInstruction("OP_SUPER_INVOKE", chunk, offset);
         default:
             printf("Unknown opcode: 0x%x\n", instruction);
             return offset + 1;

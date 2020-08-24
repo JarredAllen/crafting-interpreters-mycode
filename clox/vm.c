@@ -567,6 +567,53 @@ static InterpretResult run() {
                 frame = &vm.frames[vm.frameCount-1];
                 break;
             }
+            case OP_INHERIT: {
+                Value superclass = stackPeek(1);
+                if (!IS_CLASS(superclass)) {
+                    runtimeError("Superclass must be a class");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjClass* subclass = (ObjClass*)stackPeek(0).as.obj;
+                copyTable(&((ObjClass*)superclass.as.obj)->methods, &subclass->methods);
+                stackPop();
+                break;
+            }
+            case OP_GET_SUPER: {
+                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
+                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                if (!bindMethod(superclass, name)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_GET_SUPER_LONG: {
+                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                if (!bindMethod(superclass, name)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_SUPER_INVOKE: {
+                ObjString* method = (ObjString*)READ_CONSTANT().as.obj;
+                int argCount = READ_BYTE();
+                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                if (!invokeFromClass(superclass, method, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm.frames[vm.frameCount-1];
+                break;
+            }
+            case OP_SUPER_INVOKE_LONG: {
+                ObjString* method = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                int argCount = READ_BYTE();
+                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                if (!invokeFromClass(superclass, method, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm.frames[vm.frameCount-1];
+                break;
+            }
             default: runtimeError("Reached unknown bytecode: 0x%x", instruction); return INTERPRET_RUNTIME_ERROR;
         }
     }
