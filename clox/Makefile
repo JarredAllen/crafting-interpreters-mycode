@@ -1,5 +1,5 @@
 CC=gcc
-CC_FLAGS=-Wall -Wextra -Wpedantic -g -O2 -pg
+CC_FLAGS=-Wall -Wextra -Wpedantic -g -O2
 
 ODIR=build
 
