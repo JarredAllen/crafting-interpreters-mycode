@@ -101,7 +101,7 @@ static void markValue(Value value) {
     if (!IS_OBJ(value)) {
         return;
     }
-    markObject(value.as.obj);
+    markObject(AS_OBJECT(value));
 }
 static void markTable(Table* table) {
     for (uint i=0; i < table->capacity; i++) {

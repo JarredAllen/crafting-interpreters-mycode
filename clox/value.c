@@ -26,28 +26,35 @@ void freeValueArray(ValueArray* values) {
 }
 
 void printValue(Value value) {
-    switch (value.type) {
-        case VAL_NUMBER: printf("%g", value.as.number); break;
-        case VAL_INTEGER: printf("%ld", value.as.integer); break;
-        case VAL_BOOL: printf(value.as.boolean ? "true" : "false"); break;
-        case VAL_NIL: printf("nil"); break;
-        case VAL_OBJ: printObject(value.as.obj); break;
+    if (IS_NUMBER(value)) {
+        printf("%g", AS_NUMBER(value));
+    } else if (IS_INTEGER(value)) {
+        printf("%d", AS_INTEGER(value));
+    } else if (IS_BOOL(value)) {
+        printf(AS_BOOL(value) ? "true" : "false");
+    } else if (IS_NIL(value)) {
+        printf("nil");
+    } else if (IS_OBJ(value)) {
+        printObject(AS_OBJECT(value));
     }
 }
 
 bool truthy(Value value) {
-    switch (value.type) {
-        case VAL_NIL:    return false;
-        case VAL_BOOL:   return value.as.boolean;
-        case VAL_NUMBER:
-        case VAL_INTEGER:
-        case VAL_OBJ:   
-            return true;
+    if (IS_NIL(value)) {
+        return false;
+    } else if (IS_BOOL(value)) {
+        return AS_BOOL(value);
+    } else {
+        return true;
     }
-    return false;
 }
 
 bool valuesEqual(Value a, Value b) {
+#ifdef NAN_BOXING
+    // Note: this says NaN == NaN is true, which goes against IEE 754
+    // But the performance savings are worth it
+    return a == b;
+#else
     if (a.type != b.type) {
         return false;
     }
@@ -58,5 +65,5 @@ bool valuesEqual(Value a, Value b) {
         case VAL_INTEGER: return a.as.integer == b.as.integer;
         case VAL_OBJ:    return a.as.obj == b.as.obj;
     }
-    return false;
+#endif
 }

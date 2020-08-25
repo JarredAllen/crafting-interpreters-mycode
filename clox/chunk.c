@@ -44,7 +44,7 @@ uint64_t addConstant(Chunk*chunk, Value value) {
     if (IS_STRING(value)) {
         Value index;
         if (tableGet(&chunk->stringConstants, AS_STRING(value), &index)) {
-            return (uint64_t) index.as.integer;
+            return (uint64_t)AS_INTEGER(index);
         } else {
             writeValueArray(&chunk->constants, value);
             uint64_t index = chunk->constants.length - 1;

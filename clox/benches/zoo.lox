@@ -1,3 +1,11 @@
+// This bench tests the calling of methods and accessing of hashtables.
+
+// The first line outputs the amount of time it takes to run, usually
+// about 5 seconds if compiled with -O2 or -O3 (with -O2 a little
+// faster)
+// The second line should be:
+// 1e+08
+
 class Zoo {
   init() {
     this.aardvark = 1;

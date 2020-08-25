@@ -1,9 +1,9 @@
-CC=gcc
+CC=clang
 CC_FLAGS=-Wall -Wextra -Wpedantic -g -O2
 
 ODIR=build
 
-HEADERS=common.h chunk.h compiler.h debug.h lexer.h memory.h table.h object.h value.h vm.h
+HEADERS=common.h chunk.h compiler.h debug.h lexer.h memory.h table.h object.h value.h vm.h Makefile
 _OBJ=chunk.o compiler.o debug.o lexer.o main.o memory.o table.o object.o value.o vm.o
 OBJ=$(patsubst %,$(ODIR)/%,$(_OBJ))
 

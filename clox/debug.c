@@ -52,7 +52,7 @@ static int closureInstruction(Chunk* chunk, int offset) {
     printf("%-21s 0x%04x '", "OP_CLOSURE", constant);
     printValue(chunk->constants.values[constant]);
     printf("'\n");
-    ObjFunction* function = (ObjFunction*)chunk->constants.values[constant].as.obj;
+    ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);
     for (int j=0; j < function->upvalueCount; j++) {
         int isLocal = chunk->code[offset++];
         int index = chunk->code[offset++];
@@ -65,7 +65,7 @@ static int longClosureInstruction(Chunk* chunk, int offset) {
     printf("%-21s 0x%04x '", "OP_CLOSURE_LONG", constant);
     printValue(chunk->constants.values[constant]);
     printf("'\n");
-    ObjFunction* function = (ObjFunction*)chunk->constants.values[constant].as.obj;
+    ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);
     for (int j=0; j < function->upvalueCount; j++) {
         int isLocal = chunk->code[offset++];
         int index = chunk->code[offset++];

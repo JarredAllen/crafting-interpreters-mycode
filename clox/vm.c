@@ -78,7 +78,7 @@ static void defineNative(const char* name, NativeFn function) {
     // using them
     stackPush(OBJ_VAL(copyString(name, (int)strlen(name))));
     stackPush(OBJ_VAL(newNative(function)));
-    tableSet(&vm.globals, (ObjString*)vm.stack[0].as.obj, vm.stack[1]);
+    tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
     stackPop();
     stackPop();
 }
@@ -100,20 +100,20 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool callValue(Value callee, int argCount) {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
-            case OBJ_CLOSURE: return call((ObjClosure*)callee.as.obj, argCount);
+            case OBJ_CLOSURE: return call(AS_CLOSURE(callee), argCount);
             case OBJ_NATIVE: {
-                NativeFn native = ((ObjNative*)callee.as.obj)->function;
+                NativeFn native = AS_NATIVE(callee)->function;
                 Value result = native(argCount, vm.stackTop - argCount);
                 vm.stackTop -= argCount + 1;
                 stackPush(result);
                 return true;
             }
             case OBJ_CLASS: {
-                ObjClass* class = (ObjClass*)callee.as.obj;
+                ObjClass* class = AS_CLASS(callee);
                 vm.stackTop[-argCount-1] = OBJ_VAL(newInstance(class));
                 Value initializer;
                 if (tableGet(&class->methods, vm.initString, &initializer)) {
-                    return call((ObjClosure*)initializer.as.obj, argCount);
+                    return call(AS_CLOSURE(initializer), argCount);
                 } else if (argCount != 0) {
                     runtimeError("Expected 0 arguments but got %d.", argCount);
                     return false;
@@ -122,7 +122,7 @@ static bool callValue(Value callee, int argCount) {
                 }
             }
             case OBJ_BOUND_METHOD: {
-                ObjBoundMethod* bound = (ObjBoundMethod*)callee.as.obj;
+                ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
                 vm.stackTop[-argCount-1] = bound->receiver;
                 return call(bound->method, argCount);
             }
@@ -203,7 +203,7 @@ static void closeUpvalues(Value* last) {
 
 static void defineMethod(ObjString* name) {
     Value method = stackPeek(0);
-    ObjClass* class = (ObjClass*)stackPeek(1).as.obj;
+    ObjClass* class = AS_CLASS(stackPeek(1));
     tableSet(&class->methods, name, method);
     stackPop();
 }
@@ -213,7 +213,7 @@ static bool bindMethod(ObjClass* class, ObjString* name) {
     if (!tableGet(&class->methods, name, &method)) {
         return false;
     }
-    ObjBoundMethod* bound = newBoundMethod(stackPeek(0), (ObjClosure*)method.as.obj);
+    ObjBoundMethod* bound = newBoundMethod(stackPeek(0), AS_CLOSURE(method));
     stackPop();
     stackPush(OBJ_VAL(bound));
     return true;
@@ -225,7 +225,7 @@ static bool invokeFromClass(ObjClass* class, ObjString* name, int argCount) {
         runtimeError("Undefined property '%s'.", name->chars);
         return false;
     }
-    return call((ObjClosure*)method.as.obj, argCount);
+    return call(AS_CLOSURE(method), argCount);
 }
 
 static bool invoke(ObjString* name, int argCount) {
@@ -234,7 +234,7 @@ static bool invoke(ObjString* name, int argCount) {
         runtimeError("Only instances have methods.");
         return false;
     }
-    ObjInstance* instance = (ObjInstance*)receiver.as.obj;
+    ObjInstance* instance = AS_INSTANCE(receiver);
     Value value;
     if (tableGet(&instance->fields, name, &value)) {
         vm.stackTop[-argCount-1] = value;
@@ -254,8 +254,8 @@ static bool invoke(ObjString* name, int argCount) {
             runtimeError("Operands must be numbers."); \
             return INTERPRET_RUNTIME_ERROR; \
         } \
-        double b = stackPop().as.number; \
-        double a = stackPop().as.number; \
+        double b = AS_NUMBER(stackPop()); \
+        double a = AS_NUMBER(stackPop()); \
         stackPush(valueType(a op b)); \
     } while(false)
 static InterpretResult run() {
@@ -311,7 +311,7 @@ static InterpretResult run() {
                     runtimeError("Unary negation operand must be a number");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                stackPush(NUMBER_VAL(-stackPop().as.number));
+                stackPush(NUMBER_VAL(-AS_NUMBER(stackPop())));
                 break;
             }
             case OP_NOT: {
@@ -334,7 +334,7 @@ static InterpretResult run() {
                 } else if (IS_NUMBER(stackPeek(0))  && IS_NUMBER(stackPeek(1))) {
                     Value b = stackPop();
                     Value a = stackPop();
-                    stackPush(NUMBER_VAL(a.as.number + b.as.number));
+                    stackPush(NUMBER_VAL(AS_NUMBER(a) + AS_NUMBER(b)));
                 } else {
                     runtimeError("Addition operands must be either two strings or two numbers");
                     return INTERPRET_RUNTIME_ERROR;
@@ -452,7 +452,7 @@ static InterpretResult run() {
             }
             case OP_NOP: break;
             case OP_CLOSURE: {
-                ObjFunction* function = (ObjFunction*)READ_CONSTANT().as.obj;
+                ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
                 ObjClosure* closure = newClosure(function);
                 stackPush(OBJ_VAL(closure));
                 for (int i=0; i<closure->upvalueCount; i++) {
@@ -482,11 +482,11 @@ static InterpretResult run() {
                 break;
             }
             case OP_CLASS: {
-                stackPush(OBJ_VAL(newClass((ObjString*)READ_CONSTANT().as.obj)));
+                stackPush(OBJ_VAL(newClass(AS_STRING(READ_CONSTANT()))));
                 break;
             }
             case OP_CLASS_LONG: {
-                stackPush(OBJ_VAL(newClass((ObjString*)READ_CONSTANT_LONG().as.obj)));
+                stackPush(OBJ_VAL(newClass(AS_STRING(READ_CONSTANT_LONG()))));
                 break;
             }
             case OP_GET_PROPERTY: {
@@ -494,8 +494,8 @@ static InterpretResult run() {
                     runtimeError("Only instances have properties");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*)stackPeek(0).as.obj;
-                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
+                ObjInstance* instance = AS_INSTANCE(stackPeek(0));
+                ObjString* name = AS_STRING(READ_CONSTANT());
                 Value value;
                 if (tableGet(&instance->fields, name, &value)) {
                     stackPop();
@@ -512,8 +512,8 @@ static InterpretResult run() {
                     runtimeError("Only instances have properties");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*)stackPeek(0).as.obj;
-                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                ObjInstance* instance = AS_INSTANCE(stackPeek(0));
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
                 Value value;
                 if (tableGet(&instance->fields, name, &value)) {
                     stackPop();
@@ -529,8 +529,8 @@ static InterpretResult run() {
                     runtimeError("Only instances have properties");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*)stackPeek(1).as.obj;
-                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
+                ObjInstance* instance = AS_INSTANCE(stackPeek(1));
+                ObjString* name = AS_STRING(READ_CONSTANT());
                 Value value = stackPop();
                 tableSet(&instance->fields, name, value);
                 stackPop();
@@ -542,8 +542,8 @@ static InterpretResult run() {
                     runtimeError("Only instances have properties");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*)stackPeek(1).as.obj;
-                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                ObjInstance* instance = AS_INSTANCE(stackPeek(1));
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
                 Value value = stackPop();
                 tableSet(&instance->fields, name, value);
                 stackPop();
@@ -551,15 +551,15 @@ static InterpretResult run() {
                 break;
             }
             case OP_METHOD: {
-                defineMethod((ObjString*)READ_CONSTANT().as.obj);
+                defineMethod(AS_STRING(READ_CONSTANT()));
                 break;
             }
             case OP_METHOD_LONG: {
-                defineMethod((ObjString*)READ_CONSTANT_LONG().as.obj);
+                defineMethod(AS_STRING(READ_CONSTANT_LONG()));
                 break;
             }
             case OP_INVOKE: {
-                ObjString* method = (ObjString*)READ_CONSTANT().as.obj;
+                ObjString* method = AS_STRING(READ_CONSTANT());
                 int argCount = READ_BYTE();
                 if (!invoke(method, argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
@@ -573,31 +573,31 @@ static InterpretResult run() {
                     runtimeError("Superclass must be a class");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                ObjClass* subclass = (ObjClass*)stackPeek(0).as.obj;
-                copyTable(&((ObjClass*)superclass.as.obj)->methods, &subclass->methods);
+                ObjClass* subclass = AS_CLASS(stackPeek(0));
+                copyTable(&AS_CLASS(superclass)->methods, &subclass->methods);
                 stackPop();
                 break;
             }
             case OP_GET_SUPER: {
-                ObjString* name = (ObjString*)READ_CONSTANT().as.obj;
-                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                ObjString* name = AS_STRING(READ_CONSTANT());
+                ObjClass* superclass = AS_CLASS(stackPop());
                 if (!bindMethod(superclass, name)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
             }
             case OP_GET_SUPER_LONG: {
-                ObjString* name = (ObjString*)READ_CONSTANT_LONG().as.obj;
-                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+                ObjClass* superclass = AS_CLASS(stackPop());
                 if (!bindMethod(superclass, name)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
             }
             case OP_SUPER_INVOKE: {
-                ObjString* method = (ObjString*)READ_CONSTANT().as.obj;
+                ObjString* method = AS_STRING(READ_CONSTANT());
                 int argCount = READ_BYTE();
-                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                ObjClass* superclass = AS_CLASS(stackPop());
                 if (!invokeFromClass(superclass, method, argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -605,9 +605,9 @@ static InterpretResult run() {
                 break;
             }
             case OP_SUPER_INVOKE_LONG: {
-                ObjString* method = (ObjString*)READ_CONSTANT_LONG().as.obj;
+                ObjString* method = AS_STRING(READ_CONSTANT_LONG());
                 int argCount = READ_BYTE();
-                ObjClass* superclass = (ObjClass*)stackPop().as.obj;
+                ObjClass* superclass = AS_CLASS(stackPop());
                 if (!invokeFromClass(superclass, method, argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }

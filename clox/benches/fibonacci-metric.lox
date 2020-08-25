@@ -1,12 +1,12 @@
 // This script mostly measures how efficient our function calls are.
 
 // The first three lines should look like:
-// fibonacci(32):
-// 2.17831e+06
+// fibonacci(35):
+// 9.22746e+06
 // Time taken (seconds):
 
-// The last line indicates how long it took to run (typically about 0.81 seconds
-// if compiled with -Og, or 0.43 seconds if compiled with -O2).
+// The last line indicates how long it took to run (typically about 1.6-1.7
+// seconds if compiled with -O2 or -O3).
 
 fun fibonacci(n) {
     if (n < 2) {

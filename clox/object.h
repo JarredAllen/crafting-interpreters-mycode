@@ -86,7 +86,7 @@ ObjClass* newClass(ObjString* name);
 ObjInstance* newInstance(ObjClass* class);
 ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 
-#define OBJ_TYPE(value) (value.as.obj->type)
+#define OBJ_TYPE(value) (AS_OBJECT(value)->type)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 #define IS_NATIVE(value) isObjType(value, OBJ_NATIVE)
@@ -96,8 +96,16 @@ ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 #define IS_INSTANCE(value) isObjType(value, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
 static inline bool isObjType(Value value, ObjType type) {
-    return IS_OBJ(value) && value.as.obj->type == type;
+    return IS_OBJ(value) && OBJ_TYPE(value) == type;
 }
+
+#define AS_FUNCTION(value) ((ObjFunction*)AS_OBJECT(value))
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJECT(value))
+#define AS_CLOSURE(value) ((ObjClosure*)AS_OBJECT(value))
+#define AS_UPVALUE(value) ((ObjUpvalue*)AS_OBJECT(value))
+#define AS_CLASS(value) ((ObjClass*)AS_OBJECT(value))
+#define AS_INSTANCE(value) ((ObjInstance*)AS_OBJECT(value))
+#define AS_BOUND_METHOD(value) ((ObjBoundMethod*)AS_OBJECT(value))
 
 void printObject(Obj*);
 
